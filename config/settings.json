@@ -1,5 +1,5 @@
 {
-  "ollamaUrl": "http://161.97.78.248:11434/api/chat",
+  "ollamaUrl": "http://127.0.0.1:11434/api/chat",
   "model": "mistral",
   "requestTimeoutMs": null,
   "maxNoteLength": 220,
