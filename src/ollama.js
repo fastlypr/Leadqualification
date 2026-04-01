@@ -1,6 +1,6 @@
 const RESPONSE_SCHEMA = {
   lead_category:
-    "Hotel | Resort | Serviced Apartment | Villa | Hospitality Brand | Restaurant | Cafe | Bar | Cloud Kitchen | Dining Group | F&B Brand | Real Estate Developer | Property Group | Real Estate Agency | Project Launch | Clinic | Salon | Gym | Spa | Studio | Wellness Brand | Lifestyle Brand | Outside ICP | Unclear",
+    "Hotel | Resort | Serviced Apartment | Villa | Hospitality Brand | Restaurant | Cafe | Bar | Cloud Kitchen | Dining Group | F&B Brand | Real Estate Developer | Property Group | Real Estate Agency | Project Launch | Salon | Gym | Spa | Studio | Wellness Brand | Lifestyle Brand | Outside ICP | Unclear",
   qualification_status: "Qualified | Disqualified",
   qualification_note: "short note explaining why"
 };
@@ -269,8 +269,8 @@ function normalizeCategory(value) {
     ["brokerage", "Real Estate Agency"],
     ["project launch", "Project Launch"],
     ["project marketing", "Project Launch"],
-    ["clinic", "Clinic"],
-    ["clinics", "Clinic"],
+    ["clinic", "Outside ICP"],
+    ["clinics", "Outside ICP"],
     ["salon", "Salon"],
     ["salons", "Salon"],
     ["gym", "Gym"],
@@ -361,7 +361,7 @@ function normalizeCategory(value) {
   }
 
   if (normalized.includes("clinic")) {
-    return "Clinic";
+    return "Outside ICP";
   }
 
   if (normalized.includes("salon")) {

@@ -7,9 +7,9 @@ If the current business is outside Unsocials' ICP, the lead must be Disqualified
 If a person sells to hospitality, F&B, real estate, or lifestyle brands but is not themselves operating one of those brands, they are outside ICP and must be Disqualified.
 
 Unsocials core ICP:
-- Hospitality, F&B, real estate, lifestyle, and consumer-facing service businesses that rely heavily on visual branding, reputation, and local discovery
+- Hospitality, F&B, real estate, and selected lifestyle consumer-facing businesses that rely heavily on visual branding, reputation, and local discovery
 - Best fit people are owners, founders, co-founders, CEOs, managing directors, brand directors, marketing heads, and other clear decision-makers with budget authority
-- Best fit companies are multi-location brands, premium service businesses, restaurants, hotels, real estate groups, clinics, salons, gyms, studios, spas, and lifestyle brands with active customer acquisition needs
+- Best fit companies are multi-location brands, premium service businesses, restaurants, hotels, real estate groups, salons, gyms, studios, spas, and lifestyle brands with active customer acquisition needs
 
 Lead category rules:
 - `lead_category` should describe the lead's actual current business type, not a broad industry label, whenever the row makes that clear.
@@ -34,7 +34,6 @@ Allowed lead categories:
 - Property Group
 - Real Estate Agency
 - Project Launch
-- Clinic
 - Salon
 - Gym
 - Spa
@@ -53,6 +52,7 @@ Automatic disqualifiers:
 - Coach, consultant, advisor, practitioner, trainer, speaker, mentor, or expert-led personal brand business
 - Service provider whose current business mainly serves other businesses rather than end consumers
 - Any lead whose summary talks about helping hospitality, F&B, real estate, or lifestyle operators, but whose own company is not one of those businesses
+- Clinics, medical practices, dentists, healthcare providers, and other healthcare businesses
 - Any title with no buying authority such as intern, coordinator, assistant, or analyst
 
 Qualification rules:
@@ -61,6 +61,6 @@ Qualification rules:
 - When evidence is mixed, default to Disqualified unless the current business clearly fits ICP
 
 Output instructions:
-- lead_category must be exactly one of: Hotel, Resort, Serviced Apartment, Villa, Hospitality Brand, Restaurant, Cafe, Bar, Cloud Kitchen, Dining Group, F&B Brand, Real Estate Developer, Property Group, Real Estate Agency, Project Launch, Clinic, Salon, Gym, Spa, Studio, Wellness Brand, Lifestyle Brand, Outside ICP, Unclear
+- lead_category must be exactly one of: Hotel, Resort, Serviced Apartment, Villa, Hospitality Brand, Restaurant, Cafe, Bar, Cloud Kitchen, Dining Group, F&B Brand, Real Estate Developer, Property Group, Real Estate Agency, Project Launch, Salon, Gym, Spa, Studio, Wellness Brand, Lifestyle Brand, Outside ICP, Unclear
 - qualification_status must be exactly one of: Qualified or Disqualified
 - qualification_note must be one short sentence explaining the decision
