@@ -4,18 +4,26 @@ import { mkdir, readFile } from "node:fs/promises";
 export const PROMPT_PLACEHOLDER = "TODO_ADD_YOUR_PROMPT_HERE";
 
 export async function loadConfig(cwd = process.cwd()) {
+  const envPath = path.resolve(cwd, ".env");
+  await loadDotEnv(envPath);
+
   const settingsPath = path.resolve(cwd, "config/settings.json");
   const raw = await readFile(settingsPath, "utf8");
   const parsed = JSON.parse(raw);
 
   const config = {
     cwd,
+    envPath,
     settingsPath,
-    ollamaUrl: parsed.ollamaUrl,
-    model: parsed.model || "mistral",
-    requestTimeoutMs: parseRequestTimeout(parsed.requestTimeoutMs),
+    ollamaUrl: getEnvValue("OLLAMA_URL") || parsed.ollamaUrl,
+    model: getEnvValue("OLLAMA_MODEL") || getEnvValue("MODEL") || parsed.model || "mistral",
+    requestTimeoutMs: parseRequestTimeout(
+      getEnvValue("REQUEST_TIMEOUT_MS") ?? parsed.requestTimeoutMs
+    ),
     maxNoteLength: Number(parsed.maxNoteLength || 220),
     maxOutreachLength: Number(parsed.maxOutreachLength || 500),
+    notionToken: getEnvValue("NOTION_TOKEN") || null,
+    notionDatabaseId: getEnvValue("NOTION_DATABASE_ID") || null,
     promptFile: path.resolve(cwd, parsed.promptFile || "./config/prompt.txt"),
     inputDir: path.resolve(cwd, parsed.inputDir || "./input"),
     processingDir: path.resolve(cwd, parsed.processingDir || "./processing"),
@@ -40,7 +48,12 @@ function parseRequestTimeout(value) {
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
 
-    if (normalized === "none" || normalized === "infinite" || normalized === "infinity") {
+    if (
+      normalized === "null" ||
+      normalized === "none" ||
+      normalized === "infinite" ||
+      normalized === "infinity"
+    ) {
       return null;
     }
   }
@@ -81,4 +94,59 @@ export async function loadPrompt(config) {
   }
 
   return prompt;
+}
+
+async function loadDotEnv(envPath) {
+  let raw;
+
+  try {
+    raw = await readFile(envPath, "utf8");
+  } catch (error) {
+    if (error && error.code === "ENOENT") {
+      return;
+    }
+
+    throw error;
+  }
+
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const normalized = trimmed.startsWith("export ") ? trimmed.slice(7).trim() : trimmed;
+    const separatorIndex = normalized.indexOf("=");
+
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = normalized.slice(0, separatorIndex).trim();
+    const value = stripWrappingQuotes(normalized.slice(separatorIndex + 1).trim());
+
+    if (!key || process.env[key] !== undefined) {
+      continue;
+    }
+
+    process.env[key] = value;
+  }
+}
+
+function getEnvValue(name) {
+  const value = process.env[name];
+
+  return value === undefined || value === "" ? null : value;
+}
+
+function stripWrappingQuotes(value) {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+
+  return value;
 }

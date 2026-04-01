@@ -25,9 +25,44 @@ The worker keeps every original CSV column and appends:
 
 ## Setup
 
-1. Edit [config/settings.json](/Users/vipankumar/Desktop/Lead%20Qualifier/config/settings.json) if you want a different model, endpoint, or timeout. Set `requestTimeoutMs` to `null` to wait forever.
-2. Replace the placeholder text in [config/prompt.txt](/Users/vipankumar/Desktop/Lead%20Qualifier/config/prompt.txt) with your lead qualification prompt.
-3. Drop one or more `.csv` files into [input](/Users/vipankumar/Desktop/Lead%20Qualifier/input).
+1. Copy `.env.example` to `.env` and fill in any values you want to override locally:
+
+```bash
+cp .env.example .env
+```
+
+Useful `.env` keys:
+
+- `OLLAMA_URL`
+- `OLLAMA_MODEL`
+- `REQUEST_TIMEOUT_MS`
+- `NOTION_TOKEN`
+- `NOTION_DATABASE_ID`
+
+2. Edit [config/settings.json](/Users/vipankumar/Desktop/Lead%20Qualifier/config/settings.json) if you want a different default model, endpoint, or timeout. Values in `.env` override `config/settings.json`.
+3. Replace the placeholder text in [config/prompt.txt](/Users/vipankumar/Desktop/Lead%20Qualifier/config/prompt.txt) with your lead qualification prompt.
+4. Drop one or more `.csv` files into [input](/Users/vipankumar/Desktop/Lead%20Qualifier/input).
+
+## Ubuntu Secret Setup
+
+If you want to keep your Notion token in the project folder instead of your shell profile:
+
+```bash
+cd ~/lead
+nano .env
+```
+
+Then paste:
+
+```bash
+OLLAMA_URL="http://127.0.0.1:11434/api/chat"
+OLLAMA_MODEL="mistral"
+REQUEST_TIMEOUT_MS="null"
+NOTION_TOKEN="YOUR_NOTION_TOKEN_HERE"
+NOTION_DATABASE_ID="YOUR_NOTION_DATABASE_ID_HERE"
+```
+
+Save with `Ctrl+O`, press `Enter`, then `Ctrl+X`.
 
 ## Run Once
 
