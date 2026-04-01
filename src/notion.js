@@ -44,15 +44,31 @@ export async function createNotionSync({ config, logger }) {
 function createNotionClient(token) {
   return {
     async request(method, path, body, attempt = 0) {
-      const response = await fetch(`${NOTION_API_BASE_URL}${path}`, {
-        method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Notion-Version": NOTION_VERSION,
-          "Content-Type": "application/json"
-        },
-        body: body ? JSON.stringify(body) : undefined
-      });
+      const url = `${NOTION_API_BASE_URL}${path}`;
+      let response;
+
+      try {
+        response = await fetch(url, {
+          method,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Notion-Version": NOTION_VERSION,
+            "Content-Type": "application/json"
+          },
+          body: body ? JSON.stringify(body) : undefined
+        });
+      } catch (error) {
+        const reason =
+          error instanceof Error && error.cause instanceof Error
+            ? error.cause.message
+            : error instanceof Error
+              ? error.message
+              : String(error);
+
+        throw new Error(
+          `Notion network request failed for ${method} ${url}. ${reason}. If this is Ubuntu, try IPv4-first networking and confirm the server can reach api.notion.com.`
+        );
+      }
 
       if (response.ok) {
         if (response.status === 204) {

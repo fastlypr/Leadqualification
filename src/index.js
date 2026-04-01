@@ -1,8 +1,10 @@
+import { setDefaultResultOrder } from "node:dns";
 import { ensureRuntimeDirectories, loadConfig } from "./config.js";
 import { createLogger } from "./logger.js";
 import { processPendingFiles } from "./processor.js";
 
 try {
+  setDefaultResultOrder("ipv4first");
   const maxLeads = parsePositiveInteger(process.argv[2]);
   const config = await loadConfig(process.cwd());
   await ensureRuntimeDirectories(config);
