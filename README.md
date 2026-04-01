@@ -2,20 +2,20 @@
 
 This is a simple folder-based script for qualifying leads from CSV files.
 
-You do not need a frontend. You drop a CSV into `input/`, add your custom prompt to `config/prompt.txt`, and run the worker. It processes one lead at a time and can sync qualified results into Notion when `NOTION_TOKEN` and `NOTION_DATABASE_ID` are set.
+You do not need a frontend. You drop a CSV into `input/`, add your custom prompt to `config/prompt.txt`, and run the worker. It processes one lead at a time and syncs qualified results into Notion when `NOTION_TOKEN` and `NOTION_DATABASE_ID` are set.
 
 ## Folder Flow
 
 - `input/` - drop raw lead CSV files here
 - `processing/` - active job files and resume state
-- `output/` - enriched CSV files
+- `output/` - only used when Notion sync is disabled
 - `done/` - original CSV files after success
 - `failed/` - files that could not be initialized or recovered
 - `logs/` - processing logs
 
-## Added Output Columns
+## Working Columns
 
-The worker keeps every original CSV column and appends:
+The worker keeps every original CSV column in its resume-safe working file and appends:
 
 - `lead_category`
 - `qualification_status`
@@ -99,6 +99,7 @@ node src/index.js 10
 - If one lead fails, that row gets a `processing_error` value and the worker continues to the next lead.
 - If a row already has `processed_at` plus either `qualification_status` or `processing_error`, it is skipped on resume.
 - If Notion sync is enabled, each processed lead is upserted into the configured Notion database before the worker moves to the next lead.
+- If Notion sync is enabled, the source CSV is used as input only and no final enriched CSV is written to `output/`.
 
 ## CSV Notes
 

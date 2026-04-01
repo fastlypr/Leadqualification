@@ -235,15 +235,23 @@ async function processJob(state, promptText, config, logger, runState, notionSyn
     return { completed: false, limitReached: true };
   }
 
-  await copyFile(state.workingPath, state.outputPath);
   await copyFile(state.originalPath, state.donePath);
-  await unlink(state.workingPath);
   await unlink(state.originalPath);
-  await unlink(state.statePath);
 
-  await logger.info(
-    `Finished ${state.sourceName}. Output saved to ${path.basename(state.outputPath)}.`
-  );
+  if (notionSync) {
+    await unlink(state.workingPath);
+    await unlink(state.statePath);
+    await logger.info(
+      `Finished ${state.sourceName}. Leads were synced to Notion and the source CSV was moved to done/.`
+    );
+  } else {
+    await copyFile(state.workingPath, state.outputPath);
+    await unlink(state.workingPath);
+    await unlink(state.statePath);
+    await logger.info(
+      `Finished ${state.sourceName}. Output saved to ${path.basename(state.outputPath)}.`
+    );
+  }
 
   return { completed: true, limitReached: false };
 }
