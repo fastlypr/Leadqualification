@@ -1,0 +1,14 @@
+{
+  "ollamaUrl": "http://161.97.78.248:11434/api/chat",
+  "model": "mistral",
+  "requestTimeoutMs": null,
+  "maxNoteLength": 220,
+  "maxOutreachLength": 500,
+  "promptFile": "./config/prompt.txt",
+  "inputDir": "./input",
+  "processingDir": "./processing",
+  "outputDir": "./output",
+  "doneDir": "./done",
+  "failedDir": "./failed",
+  "logsDir": "./logs"
+}

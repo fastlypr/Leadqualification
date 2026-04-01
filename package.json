@@ -1,0 +1,10 @@
+{
+  "name": "lead-qualifier-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "process": "node src/index.js",
+    "start": "node src/index.js"
+  }
+}
