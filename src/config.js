@@ -23,7 +23,7 @@ export async function loadConfig(cwd = process.cwd()) {
     maxNoteLength: Number(parsed.maxNoteLength || 220),
     maxOutreachLength: Number(parsed.maxOutreachLength || 500),
     notionToken: getEnvValue("NOTION_TOKEN") || null,
-    notionDatabaseId: getEnvValue("NOTION_DATABASE_ID") || null,
+    notionDatabaseId: normalizeNotionDatabaseId(getEnvValue("NOTION_DATABASE_ID") || null),
     promptFile: path.resolve(cwd, parsed.promptFile || "./config/prompt.txt"),
     inputDir: path.resolve(cwd, parsed.inputDir || "./input"),
     processingDir: path.resolve(cwd, parsed.processingDir || "./processing"),
@@ -149,4 +149,28 @@ function stripWrappingQuotes(value) {
   }
 
   return value;
+}
+
+function normalizeNotionDatabaseId(value) {
+  const raw = String(value || "").trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  const match = raw.match(/[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+
+  if (!match) {
+    return raw;
+  }
+
+  const compact = match[0].replace(/-/g, "").toLowerCase();
+
+  return [
+    compact.slice(0, 8),
+    compact.slice(8, 12),
+    compact.slice(12, 16),
+    compact.slice(16, 20),
+    compact.slice(20)
+  ].join("-");
 }

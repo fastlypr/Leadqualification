@@ -2,7 +2,7 @@
 
 This is a simple folder-based script for qualifying leads from CSV files.
 
-You do not need a frontend. You drop a CSV into `input/`, add your custom prompt to `config/prompt.txt`, and run the worker. It processes one lead at a time and writes an enriched CSV to `output/`.
+You do not need a frontend. You drop a CSV into `input/`, add your custom prompt to `config/prompt.txt`, and run the worker. It processes one lead at a time and can sync qualified results into Notion when `NOTION_TOKEN` and `NOTION_DATABASE_ID` are set.
 
 ## Folder Flow
 
@@ -66,6 +66,17 @@ NOTION_DATABASE_ID="YOUR_NOTION_DATABASE_ID_HERE"
 
 Save with `Ctrl+O`, press `Enter`, then `Ctrl+X`.
 
+When Notion sync is enabled, the worker will create or use these database properties:
+
+- the database title property for the lead's full name
+- `Lead URL`
+- `Lead category`
+- `Industry`
+- `Qualification`
+- `Qualification note`
+
+Leads are matched by `Lead URL`, which is filled from `defaultProfileUrl` when available.
+
 ## Run Once
 
 ```bash
@@ -87,6 +98,7 @@ node src/index.js 10
 - If the script stops halfway through, rerun it and it will resume from the saved state file.
 - If one lead fails, that row gets a `processing_error` value and the worker continues to the next lead.
 - If a row already has `processed_at` plus either `qualification_status` or `processing_error`, it is skipped on resume.
+- If Notion sync is enabled, each processed lead is upserted into the configured Notion database before the worker moves to the next lead.
 
 ## CSV Notes
 
