@@ -1,5 +1,6 @@
 const RESPONSE_SCHEMA = {
-  lead_category: "Hospitality | F&B | Real Estate | Lifestyle & Service | Outside ICP | Unclear",
+  lead_category:
+    "Hotel | Resort | Serviced Apartment | Villa | Hospitality Brand | Restaurant | Cafe | Bar | Cloud Kitchen | Dining Group | F&B Brand | Real Estate Developer | Property Group | Real Estate Agency | Project Launch | Clinic | Salon | Gym | Spa | Studio | Wellness Brand | Lifestyle Brand | Outside ICP | Unclear",
   qualification_status: "Qualified | Disqualified",
   qualification_note: "short note explaining why"
 };
@@ -223,24 +224,172 @@ function normalizeCategory(value) {
     return "";
   }
 
-  if (normalized === "hospitality") {
-    return "Hospitality";
-  }
+  const aliases = new Map([
+    ["hotel", "Hotel"],
+    ["hotels", "Hotel"],
+    ["hotel brand", "Hotel"],
+    ["resort", "Resort"],
+    ["resorts", "Resort"],
+    ["serviced apartment", "Serviced Apartment"],
+    ["serviced apartments", "Serviced Apartment"],
+    ["service apartment", "Serviced Apartment"],
+    ["service apartments", "Serviced Apartment"],
+    ["villa", "Villa"],
+    ["villas", "Villa"],
+    ["hospitality brand", "Hospitality Brand"],
+    ["hospitality", "Hospitality Brand"],
+    ["restaurant", "Restaurant"],
+    ["restaurants", "Restaurant"],
+    ["restaurant brand", "Restaurant"],
+    ["cafe", "Cafe"],
+    ["cafe brand", "Cafe"],
+    ["cafes", "Cafe"],
+    ["café", "Cafe"],
+    ["cafés", "Cafe"],
+    ["bar", "Bar"],
+    ["bars", "Bar"],
+    ["cloud kitchen", "Cloud Kitchen"],
+    ["cloud kitchens", "Cloud Kitchen"],
+    ["dining group", "Dining Group"],
+    ["restaurant group", "Dining Group"],
+    ["food group", "Dining Group"],
+    ["f&b brand", "F&B Brand"],
+    ["food & beverage brand", "F&B Brand"],
+    ["food and beverage brand", "F&B Brand"],
+    ["f&b", "F&B Brand"],
+    ["food & beverage", "F&B Brand"],
+    ["food and beverage", "F&B Brand"],
+    ["real estate developer", "Real Estate Developer"],
+    ["developer", "Real Estate Developer"],
+    ["property developer", "Real Estate Developer"],
+    ["property group", "Property Group"],
+    ["real estate group", "Property Group"],
+    ["real estate agency", "Real Estate Agency"],
+    ["property agency", "Real Estate Agency"],
+    ["brokerage", "Real Estate Agency"],
+    ["project launch", "Project Launch"],
+    ["project marketing", "Project Launch"],
+    ["clinic", "Clinic"],
+    ["clinics", "Clinic"],
+    ["salon", "Salon"],
+    ["salons", "Salon"],
+    ["gym", "Gym"],
+    ["gyms", "Gym"],
+    ["fitness center", "Gym"],
+    ["fitness centre", "Gym"],
+    ["spa", "Spa"],
+    ["spa brand", "Spa"],
+    ["studio", "Studio"],
+    ["studios", "Studio"],
+    ["wellness brand", "Wellness Brand"],
+    ["wellness", "Wellness Brand"],
+    ["lifestyle brand", "Lifestyle Brand"],
+    ["lifestyle", "Lifestyle Brand"],
+    ["outside icp", "Outside ICP"],
+    ["outside", "Outside ICP"],
+    ["other", "Outside ICP"],
+    ["disqualified", "Outside ICP"],
+    ["unclear", "Unclear"],
+    ["unknown", "Unclear"]
+  ]);
 
-  if (normalized === "f&b" || normalized === "food & beverage" || normalized === "food and beverage") {
-    return "F&B";
-  }
-
-  if (normalized === "real estate") {
-    return "Real Estate";
+  if (aliases.has(normalized)) {
+    return aliases.get(normalized);
   }
 
   if (
-    normalized === "lifestyle & service" ||
-    normalized === "lifestyle and service" ||
-    normalized === "lifestyle/service"
+    normalized.includes("hotel") ||
+    normalized.includes("motel")
   ) {
-    return "Lifestyle & Service";
+    return "Hotel";
+  }
+
+  if (normalized.includes("resort")) {
+    return "Resort";
+  }
+
+  if (normalized.includes("serviced apartment") || normalized.includes("service apartment")) {
+    return "Serviced Apartment";
+  }
+
+  if (normalized.includes("villa")) {
+    return "Villa";
+  }
+
+  if (normalized.includes("restaurant")) {
+    return "Restaurant";
+  }
+
+  if (normalized.includes("cafe") || normalized.includes("café")) {
+    return "Cafe";
+  }
+
+  if (normalized.includes("bar")) {
+    return "Bar";
+  }
+
+  if (normalized.includes("cloud kitchen")) {
+    return "Cloud Kitchen";
+  }
+
+  if (normalized.includes("dining group") || normalized.includes("restaurant group")) {
+    return "Dining Group";
+  }
+
+  if (normalized.includes("f&b") || normalized.includes("food & beverage") || normalized.includes("food and beverage")) {
+    return "F&B Brand";
+  }
+
+  if (normalized.includes("developer")) {
+    return "Real Estate Developer";
+  }
+
+  if (normalized.includes("property group") || normalized.includes("real estate group")) {
+    return "Property Group";
+  }
+
+  if (
+    normalized.includes("real estate agency") ||
+    normalized.includes("property agency") ||
+    normalized.includes("brokerage")
+  ) {
+    return "Real Estate Agency";
+  }
+
+  if (normalized.includes("project launch")) {
+    return "Project Launch";
+  }
+
+  if (normalized.includes("clinic")) {
+    return "Clinic";
+  }
+
+  if (normalized.includes("salon")) {
+    return "Salon";
+  }
+
+  if (normalized.includes("gym") || normalized.includes("fitness center") || normalized.includes("fitness centre")) {
+    return "Gym";
+  }
+
+  if (normalized.includes("spa")) {
+    return "Spa";
+  }
+
+  if (normalized.includes("studio")) {
+    return "Studio";
+  }
+
+  if (normalized.includes("wellness")) {
+    return "Wellness Brand";
+  }
+
+  if (normalized.includes("lifestyle")) {
+    return "Lifestyle Brand";
+  }
+
+  if (normalized.includes("hospitality")) {
+    return "Hospitality Brand";
   }
 
   if (normalized === "outside icp" || normalized === "outside" || normalized === "other") {

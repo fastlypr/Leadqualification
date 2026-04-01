@@ -23,6 +23,8 @@ The worker keeps every original CSV column and appends:
 - `processed_at`
 - `processing_error`
 
+`lead_category` is now the most specific business type the model can confidently infer from the row, for example `Hotel`, `Restaurant`, `Cafe`, `Clinic`, `Salon`, `Gym`, `Spa`, `Real Estate Developer`, or `Outside ICP`.
+
 ## Setup
 
 1. Copy `.env.example` to `.env` and fill in any values you want to override locally:
