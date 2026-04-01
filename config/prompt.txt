@@ -63,4 +63,6 @@ Qualification rules:
 Output instructions:
 - lead_category must be exactly one of: Hotel, Resort, Serviced Apartment, Villa, Hospitality Brand, Restaurant, Cafe, Bar, Cloud Kitchen, Dining Group, F&B Brand, Real Estate Developer, Property Group, Real Estate Agency, Project Launch, Salon, Gym, Spa, Studio, Wellness Brand, Lifestyle Brand, Outside ICP, Unclear
 - qualification_status must be exactly one of: Qualified or Disqualified
-- qualification_note must be one short sentence explaining the decision
+- qualification_note must be one short sentence explaining the decision using concrete row evidence
+- mention the exact business signal, title, company, industry, or missing signal that drove the decision
+- never give a vague note like `unclear`, `outside ICP`, `good fit`, `bad fit`, or `not a fit` without the specific reason

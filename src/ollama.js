@@ -43,7 +43,7 @@ export async function qualifyLead({ config, promptText, leadRecord }) {
     const content = getAssistantContent(payload);
     const parsed = parseModelJson(content);
 
-    return normalizeQualificationResult(parsed, config);
+    return normalizeQualificationResult(parsed, config, leadRecord);
   } catch (error) {
     if (error.name === "AbortError") {
       throw new Error(`Ollama request timed out after ${config.requestTimeoutMs}ms.`);
@@ -64,6 +64,8 @@ function buildSystemPrompt() {
     "If the current business is outside ICP, return qualification_status as Disqualified.",
     "Only use the exact statuses Qualified or Disqualified.",
     "Only use the exact categories from the schema.",
+    "qualification_note must cite a concrete row signal or a clearly missing signal.",
+    "Never return a vague note like unclear, outside ICP, good fit, bad fit, or not a fit by itself.",
     "Return only valid JSON.",
     "Do not wrap the JSON in markdown.",
     "Use this exact schema:",
@@ -79,7 +81,7 @@ function buildUserPrompt(promptText, leadRecord) {
     "Lead record:",
     JSON.stringify(leadRecord, null, 2),
     "",
-    "Return only JSON with the required keys. Keep `qualification_note` concise."
+    "Return only JSON with the required keys. Keep `qualification_note` concise but specific."
   ].join("\n");
 }
 
@@ -169,7 +171,7 @@ function extractJsonObject(text) {
   return null;
 }
 
-function normalizeQualificationResult(result, config) {
+function normalizeQualificationResult(result, config, leadRecord) {
   const status = normalizeStatus(
     result.qualification_status ?? result.status ?? result.lead_status
   );
@@ -177,16 +179,20 @@ function normalizeQualificationResult(result, config) {
     result.lead_category ?? result.category ?? result.business_category ?? result.industry_category
   );
 
-  const note = truncate(
-    squashWhitespace(
-      result.qualification_note ??
-        result.note ??
-        result.short_note ??
-        result.summary ??
-        ""
-    ),
-    config.maxNoteLength
+  const rawNote = squashWhitespace(
+    result.qualification_note ??
+      result.note ??
+      result.short_note ??
+      result.summary ??
+      ""
   );
+  const note = buildQualificationNote({
+    rawNote,
+    status: status || "",
+    category: category || "Unclear",
+    leadRecord,
+    maxLength: config.maxNoteLength
+  });
 
   return {
     lead_category: category || "Unclear",
@@ -215,6 +221,193 @@ function normalizeStatus(value) {
   }
 
   return "";
+}
+
+function buildQualificationNote({ rawNote, status, category, leadRecord, maxLength }) {
+  const trimmed = truncate(rawNote, maxLength);
+
+  if (trimmed && !isVagueQualificationNote(trimmed, leadRecord)) {
+    return trimmed;
+  }
+
+  return truncate(buildFallbackQualificationNote({ status, category, leadRecord }), maxLength);
+}
+
+function isVagueQualificationNote(note, leadRecord) {
+  const normalized = squashWhitespace(note).toLowerCase();
+
+  if (!normalized) {
+    return true;
+  }
+
+  if (normalized.length < 24) {
+    return true;
+  }
+
+  const genericPhrases = [
+    "unclear",
+    "outside icp",
+    "good fit",
+    "bad fit",
+    "not a fit",
+    "not fit",
+    "qualified",
+    "disqualified",
+    "strong fit",
+    "weak fit"
+  ];
+
+  const hasGenericPhrase = genericPhrases.some((phrase) => normalized === phrase || normalized.startsWith(`${phrase}.`) || normalized.startsWith(`${phrase},`) || normalized.includes(` is ${phrase}`));
+  const hasRowEvidence = hasConcreteRowEvidence(note, leadRecord);
+
+  if (hasGenericPhrase && !hasRowEvidence) {
+    return true;
+  }
+
+  if (normalized.includes("unclear") && !hasRowEvidence) {
+    return true;
+  }
+
+  return false;
+}
+
+function hasConcreteRowEvidence(note, leadRecord) {
+  const haystack = squashWhitespace(note).toLowerCase();
+  const candidates = [
+    leadRecord.title,
+    leadRecord.companyName,
+    leadRecord.industry,
+    leadRecord.firstName,
+    leadRecord.lastName,
+    leadRecord.fullName
+  ]
+    .map((value) => squashWhitespace(value).toLowerCase())
+    .filter(Boolean);
+
+  return candidates.some((value) => value.length >= 4 && haystack.includes(value));
+}
+
+function buildFallbackQualificationNote({ status, category, leadRecord }) {
+  const title = squashWhitespace(leadRecord.title);
+  const companyName = squashWhitespace(leadRecord.companyName);
+  const industry = squashWhitespace(leadRecord.industry);
+  const combinedText = [
+    leadRecord.title,
+    leadRecord.companyName,
+    leadRecord.industry,
+    leadRecord.summary,
+    leadRecord.titleDescription
+  ]
+    .map((value) => squashWhitespace(value).toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+
+  const authorityLabel = getAuthorityLabel(title);
+  const businessEvidence = buildBusinessEvidence(category, companyName, industry, leadRecord);
+
+  if (status === "Qualified") {
+    const parts = [businessEvidence];
+
+    if (authorityLabel) {
+      parts.push(`title "${title}" shows decision-making authority`);
+    } else if (title) {
+      parts.push(`title "${title}" still appears senior enough for outreach`);
+    }
+
+    return joinReasonParts(parts);
+  }
+
+  if (matchesAny(combinedText, [
+    "coach",
+    "coaching",
+    "consultant",
+    "consulting",
+    "advisor",
+    "advisory",
+    "mentor",
+    "speaker",
+    "trainer",
+    "practitioner"
+  ])) {
+    return joinReasonParts([
+      companyName ? `company "${companyName}" looks like a coaching or consulting business` : "current business looks like coaching or consulting",
+      "that sits outside Unsocials' ICP"
+    ]);
+  }
+
+  if (matchesAny(combinedText, [
+    "clinic",
+    "medical",
+    "healthcare",
+    "hospital",
+    "dentist",
+    "dental"
+  ])) {
+    return joinReasonParts([
+      industry ? `industry "${industry}" points to healthcare` : "current business looks like healthcare",
+      "which is outside Unsocials' ICP"
+    ]);
+  }
+
+  if (matchesAny(combinedText, [
+    "software",
+    "saas",
+    "technology",
+    "tech",
+    "it services",
+    "information technology"
+  ])) {
+    return joinReasonParts([
+      industry ? `industry "${industry}" points to software or technology` : "current business looks like software or technology",
+      "which is outside Unsocials' ICP"
+    ]);
+  }
+
+  if (matchesAny(combinedText, [
+    "agency",
+    "marketing",
+    "advertising",
+    "recruiter",
+    "recruitment",
+    "staffing"
+  ]) && category === "Outside ICP") {
+    return joinReasonParts([
+      industry ? `industry "${industry}" does not match a consumer-facing ICP brand` : businessEvidence,
+      "and the business looks like a service provider rather than an operator brand"
+    ]);
+  }
+
+  if (!authorityLabel && looksLikeLowAuthority(title)) {
+    return joinReasonParts([
+      businessEvidence,
+      title ? `title "${title}" does not show buying authority` : "the row does not show buying authority"
+    ]);
+  }
+
+  if (category === "Outside ICP") {
+    return joinReasonParts([
+      businessEvidence,
+      "it does not match Unsocials' hospitality, F&B, real estate, or approved lifestyle ICP"
+    ]);
+  }
+
+  if (category === "Unclear") {
+    const missingBusinessReason = industry
+      ? `industry "${industry}" does not clearly prove a current ICP business`
+      : "the row does not clearly show a current hospitality, F&B, real estate, or approved lifestyle business";
+
+    if (!authorityLabel && title) {
+      return joinReasonParts([missingBusinessReason, `title "${title}" also does not clearly show buying authority`]);
+    }
+
+    return joinReasonParts([missingBusinessReason, businessEvidence]);
+  }
+
+  if (!authorityLabel && title) {
+    return joinReasonParts([businessEvidence, `title "${title}" does not clearly show final buying authority`]);
+  }
+
+  return joinReasonParts([businessEvidence, "the row still lacks enough evidence to qualify this lead"]);
 }
 
 function normalizeCategory(value) {
@@ -405,6 +598,119 @@ function normalizeCategory(value) {
 
 function squashWhitespace(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function buildBusinessEvidence(category, companyName, industry, leadRecord) {
+  const description = squashWhitespace(leadRecord.titleDescription);
+  const categoryLabel = formatCategoryLabel(category);
+
+  if (category === "Outside ICP") {
+    if (companyName && industry) {
+      return `company "${companyName}" with industry "${industry}" does not look like an Unsocials ICP brand`;
+    }
+
+    if (industry) {
+      return `industry "${industry}" does not look like an Unsocials ICP brand`;
+    }
+
+    if (companyName) {
+      return `company "${companyName}" does not clearly look like an Unsocials ICP brand`;
+    }
+
+    return "current business does not clearly look like an Unsocials ICP brand";
+  }
+
+  if (category === "Unclear") {
+    if (companyName && industry) {
+      return `company "${companyName}" and industry "${industry}" do not clearly confirm the current business type`;
+    }
+
+    if (industry) {
+      return `industry "${industry}" alone does not clearly confirm the current business type`;
+    }
+
+    if (companyName) {
+      return `company "${companyName}" alone does not clearly confirm the current business type`;
+    }
+
+    if (description) {
+      return "the company description does not clearly confirm the current business type";
+    }
+
+    return "the row does not clearly confirm the current business type";
+  }
+
+  if (companyName && industry) {
+    return `company "${companyName}" and industry "${industry}" point to a ${categoryLabel} business`;
+  }
+
+  if (companyName) {
+    return `company "${companyName}" points to a ${categoryLabel} business`;
+  }
+
+  if (industry) {
+    return `industry "${industry}" points to a ${categoryLabel} business`;
+  }
+
+  if (description) {
+    return `the company description points to a ${categoryLabel} business`;
+  }
+
+  return `current business appears to be a ${categoryLabel} business`;
+}
+
+function formatCategoryLabel(category) {
+  return String(category || "")
+    .replace(/&/g, "and")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function getAuthorityLabel(title) {
+  const normalized = squashWhitespace(title).toLowerCase();
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (
+    /(owner|founder|co-founder|cofounder|ceo|chief executive|managing director|director|general manager|gm|president|principal|head of marketing|marketing head|brand director|partner)/.test(
+      normalized
+    )
+  ) {
+    return "decision-maker";
+  }
+
+  return "";
+}
+
+function looksLikeLowAuthority(title) {
+  const normalized = squashWhitespace(title).toLowerCase();
+
+  if (!normalized) {
+    return false;
+  }
+
+  return /(intern|assistant|coordinator|analyst|executive|associate|specialist|trainee|representative)/.test(
+    normalized
+  );
+}
+
+function matchesAny(text, fragments) {
+  return fragments.some((fragment) => text.includes(fragment));
+}
+
+function joinReasonParts(parts) {
+  const cleaned = parts.map((part) => squashWhitespace(part)).filter(Boolean);
+
+  if (cleaned.length === 0) {
+    return "";
+  }
+
+  const sentence = cleaned.join(", ");
+
+  return sentence.endsWith(".") ? sentence : `${sentence}.`;
 }
 
 function truncate(value, maxLength) {
