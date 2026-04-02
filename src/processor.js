@@ -8,10 +8,10 @@ import {
   unlink,
   writeFile
 } from "node:fs/promises";
-import { loadDmPrompt, loadPrompt } from "./config.js";
+import { loadPrompt } from "./config.js";
 import { mergeHeaders, parseCsv, stringifyCsv } from "./csv.js";
 import { createNotionSync } from "./notion.js";
-import { generateDmFields, qualifyLead } from "./ollama.js";
+import { qualifyLead } from "./ollama.js";
 import { createTaskQueue } from "./queue.js";
 
 const OUTPUT_COLUMNS = [
@@ -53,15 +53,12 @@ export async function processPendingFiles({ config, logger, maxLeads = null }) {
     return;
   }
 
-  const prompts = {
-    qualificationPromptText: await loadPrompt(config),
-    dmPromptText: await loadDmPrompt(config)
-  };
+  const promptText = await loadPrompt(config);
   const notionSync = await createNotionSync({ config, logger });
 
   for (const statePath of resumableStatePaths) {
     try {
-      const result = await processExistingJob(statePath, prompts, config, logger, runState, notionSync);
+      const result = await processExistingJob(statePath, promptText, config, logger, runState, notionSync);
 
       if (result.limitReached) {
         await logger.info(`Stopped after ${runState.processedLeadCount} processed lead(s).`);
@@ -76,7 +73,7 @@ export async function processPendingFiles({ config, logger, maxLeads = null }) {
 
   for (const inputPath of freshInputCsvPaths) {
     try {
-      const result = await processNewInput(inputPath, prompts, config, logger, runState, notionSync);
+      const result = await processNewInput(inputPath, promptText, config, logger, runState, notionSync);
 
       if (result.limitReached) {
         await logger.info(`Stopped after ${runState.processedLeadCount} processed lead(s).`);
@@ -88,17 +85,17 @@ export async function processPendingFiles({ config, logger, maxLeads = null }) {
   }
 }
 
-async function processExistingJob(statePath, prompts, config, logger, runState, notionSync) {
+async function processExistingJob(statePath, promptText, config, logger, runState, notionSync) {
   const state = reviveState(
     JSON.parse(await readFile(statePath, "utf8")),
     config
   );
 
   await logger.info(`Resuming ${state.sourceName} from row ${state.nextRowIndex + 1}.`);
-  return processJob(state, prompts, config, logger, runState, notionSync);
+  return processJob(state, promptText, config, logger, runState, notionSync);
 }
 
-async function processNewInput(inputPath, prompts, config, logger, runState, notionSync) {
+async function processNewInput(inputPath, promptText, config, logger, runState, notionSync) {
   const sourceName = path.basename(inputPath);
   const baseName = path.basename(inputPath, path.extname(inputPath));
   const stamp = fileStamp();
@@ -134,7 +131,7 @@ async function processNewInput(inputPath, prompts, config, logger, runState, not
     await writeCsv(state.workingPath, workingHeaders, workingRecords);
     await writeState(state);
     await logger.info(`Started ${sourceName} with ${workingRecords.length} lead(s).`);
-    return processJob(state, prompts, config, logger, runState, notionSync);
+    return processJob(state, promptText, config, logger, runState, notionSync);
   } catch (error) {
     await logger.error(`Could not initialize ${sourceName}: ${formatError(error)}`);
     await moveFileIfPresent(state.originalPath, state.failedOriginalPath);
@@ -144,7 +141,7 @@ async function processNewInput(inputPath, prompts, config, logger, runState, not
   }
 }
 
-async function processJob(state, prompts, config, logger, runState, notionSync) {
+async function processJob(state, promptText, config, logger, runState, notionSync) {
   const { headers, records } = parseCsv(await readFile(state.workingPath, "utf8"));
   const workingHeaders = mergeHeaders(headers, OUTPUT_COLUMNS);
   const total = records.length;
@@ -194,27 +191,15 @@ async function processJob(state, prompts, config, logger, runState, notionSync) 
       try {
         const result = await qualifyLead({
           config,
-          promptText: prompts.qualificationPromptText,
+          promptText,
           leadRecord: buildQualificationInput(item.row)
         });
 
         item.row.lead_category = result.lead_category;
         item.row.qualification_status = result.qualification_status;
         item.row.qualification_note = result.qualification_note;
-        item.row.pain_hook = "";
-        item.row.personalized_line = "";
-
-        if (shouldGenerateDm(item.row)) {
-          const dmResult = await generateDmFields({
-            config,
-            promptText: prompts.dmPromptText,
-            leadRecord: buildDmInput(item.row)
-          });
-
-          item.row.pain_hook = dmResult.pain_hook;
-          item.row.personalized_line = dmResult.personalized_line;
-        }
-
+        item.row.pain_hook = result.pain_hook;
+        item.row.personalized_line = result.personalized_line;
         item.row.processing_error = "";
         item.row.processed_at = new Date().toISOString();
 
@@ -380,39 +365,12 @@ function buildQualificationInput(record) {
   return selected;
 }
 
-function buildDmInput(record) {
-  return compactRecord({
-    ...buildQualificationInput(record),
-    lead_category: record.lead_category,
-    qualification_status: record.qualification_status,
-    qualification_note: record.qualification_note
-  });
-}
-
 function isAlreadyProcessed(record) {
   const processedAt = String(record.processed_at || "").trim();
   const status = String(record.qualification_status || "").trim();
-  const painHook = String(record.pain_hook || "").trim();
-  const personalizedLine = String(record.personalized_line || "").trim();
   const error = String(record.processing_error || "").trim();
 
-  if (!processedAt) {
-    return false;
-  }
-
-  if (error) {
-    return true;
-  }
-
-  if (!status) {
-    return false;
-  }
-
-  if (!shouldGenerateDm(record)) {
-    return true;
-  }
-
-  return Boolean(painHook && personalizedLine);
+  return Boolean(processedAt && (status || error));
 }
 
 function describeLead(record) {
@@ -471,22 +429,4 @@ function formatError(error, maxLength = 300) {
   }
 
   return `${message.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
-}
-
-function shouldGenerateDm(record) {
-  const status = String(record.qualification_status || "").trim();
-
-  return status === "Qualified" || status === "Needs Review";
-}
-
-function compactRecord(record) {
-  const nextRecord = {};
-
-  for (const [key, value] of Object.entries(record)) {
-    if (String(value ?? "").trim()) {
-      nextRecord[key] = value;
-    }
-  }
-
-  return nextRecord;
 }

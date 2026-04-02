@@ -1,65 +1,13 @@
-const QUALIFICATION_SCHEMA = {
+const RESPONSE_SCHEMA = {
   lead_category:
     "Hotel | Resort | Serviced Apartment | Villa | Hospitality Brand | Restaurant | Cafe | Bar | Cloud Kitchen | Dining Group | F&B Brand | Real Estate Developer | Property Group | Real Estate Agency | Project Launch | Salon | Gym | Spa | Studio | Wellness Brand | Lifestyle Brand | Outside ICP | Unclear",
   qualification_status: "Qualified | Disqualified | Needs Review",
-  qualification_note: "one short concrete sentence explaining why"
-};
-
-const DM_SCHEMA = {
-  pain_hook: "required for Qualified or Needs Review leads",
-  personalized_line: "required for Qualified or Needs Review leads"
+  qualification_note: "one short concrete sentence explaining why",
+  pain_hook: "required only when qualification_status is Qualified or Needs Review",
+  personalized_line: "required only when qualification_status is Qualified or Needs Review"
 };
 
 export async function qualifyLead({ config, promptText, leadRecord }) {
-  const parsed = await requestStructuredOutput({
-    config,
-    promptText,
-    leadRecord,
-    schema: QUALIFICATION_SCHEMA,
-    systemInstructions: [
-      "You qualify sales leads from CSV row data.",
-      "Qualify the current business, not the audience they serve.",
-      "If the current business is outside ICP, return qualification_status as Disqualified.",
-      "Only use the exact statuses Qualified, Disqualified, or Needs Review.",
-      "Only use the exact categories from the schema.",
-      "qualification_note must cite a concrete row signal or a clearly missing signal.",
-      "Never return a vague note like unclear, outside ICP, good fit, bad fit, or not a fit by itself."
-    ],
-    finalInstruction:
-      "Return only JSON with lead_category, qualification_status, and qualification_note."
-  });
-
-  return normalizeQualificationResult(parsed, config, leadRecord);
-}
-
-export async function generateDmFields({ config, promptText, leadRecord }) {
-  const parsed = await requestStructuredOutput({
-    config,
-    promptText,
-    leadRecord,
-    schema: DM_SCHEMA,
-    systemInstructions: [
-      "You write DM personalization fields from CSV row data.",
-      "Use the qualification result already provided in the lead record.",
-      "Only write pain_hook and personalized_line.",
-      "If the lead is Disqualified, return empty strings for both fields.",
-      "Do not invent facts or locations."
-    ],
-    finalInstruction:
-      "Return only JSON with pain_hook and personalized_line."
-  });
-
-  return normalizeDmFields(parsed, leadRecord);
-}
-
-async function requestStructuredOutput({
-  config,
-  promptText,
-  leadRecord,
-  schema,
-  systemInstructions,
-  finalInstruction
-}) {
   const controller = config.requestTimeoutMs ? new AbortController() : null;
   const timeout = config.requestTimeoutMs
     ? setTimeout(() => controller.abort(), config.requestTimeoutMs)
@@ -77,11 +25,11 @@ async function requestStructuredOutput({
         messages: [
           {
             role: "system",
-            content: buildSystemPrompt(systemInstructions, schema)
+            content: buildSystemPrompt()
           },
           {
             role: "user",
-            content: buildUserPrompt(promptText, leadRecord, finalInstruction)
+            content: buildUserPrompt(promptText, leadRecord)
           }
         ]
       }),
@@ -97,7 +45,7 @@ async function requestStructuredOutput({
     const content = getAssistantContent(payload);
     const parsed = parseModelJson(content);
 
-    return parsed;
+    return normalizeQualificationResult(parsed, config, leadRecord);
   } catch (error) {
     if (error.name === "AbortError") {
       throw new Error(`Ollama request timed out after ${config.requestTimeoutMs}ms.`);
@@ -111,25 +59,33 @@ async function requestStructuredOutput({
   }
 }
 
-function buildSystemPrompt(instructions, schema) {
+function buildSystemPrompt() {
   return [
-    ...instructions,
+    "You qualify sales leads from CSV row data.",
+    "Qualify the current business, not the audience they serve.",
+    "If the current business is outside ICP, return qualification_status as Disqualified.",
+    "Only use the exact statuses Qualified, Disqualified, or Needs Review.",
+    "Only use the exact categories from the schema.",
+    "qualification_note must cite a concrete row signal or a clearly missing signal.",
+    "Never return a vague note like unclear, outside ICP, good fit, bad fit, or not a fit by itself.",
+    "If qualification_status is Qualified or Needs Review, also return pain_hook and personalized_line.",
+    "If qualification_status is Disqualified, omit pain_hook and personalized_line or return them as empty strings.",
     "Return only valid JSON.",
     "Do not wrap the JSON in markdown.",
     "Use this exact schema:",
-    JSON.stringify(schema, null, 2)
+    JSON.stringify(RESPONSE_SCHEMA, null, 2)
   ].join("\n");
 }
 
-function buildUserPrompt(promptText, leadRecord, finalInstruction) {
+function buildUserPrompt(promptText, leadRecord) {
   return [
-    "Follow these instructions exactly:",
+    "Follow these lead qualification rules exactly:",
     promptText,
     "",
     "Lead record:",
     JSON.stringify(leadRecord, null, 2),
     "",
-    finalInstruction
+    "Return only JSON with the required keys. Keep qualification_note concise but specific."
   ].join("\n");
 }
 
@@ -257,27 +213,7 @@ function normalizeQualificationResult(result, config, leadRecord) {
   return {
     lead_category: category || "Unclear",
     qualification_status: status || "",
-    qualification_note: note
-  };
-}
-
-function normalizeDmFields(result, leadRecord) {
-  const status = normalizeStatus(leadRecord.qualification_status ?? leadRecord.status);
-  const category = normalizeCategory(leadRecord.lead_category ?? leadRecord.category);
-  const painHook = buildPainHook({
-    rawPainHook: result.pain_hook ?? result.painHook ?? "",
-    status: status || "",
-    category: category || "Unclear",
-    leadRecord
-  });
-  const personalizedLine = buildPersonalizedLine({
-    rawPersonalizedLine: result.personalized_line ?? result.personalizedLine ?? "",
-    status: status || "",
-    category: category || "Unclear",
-    leadRecord
-  });
-
-  return {
+    qualification_note: note,
     pain_hook: painHook,
     personalized_line: personalizedLine
   };
@@ -343,7 +279,7 @@ function buildPersonalizedLine({ rawPersonalizedLine, status, category, leadReco
     return "";
   }
 
-  const cleaned = normalizeShortField(rawPersonalizedLine, 10);
+  const cleaned = normalizePersonalizedLine(rawPersonalizedLine, leadRecord);
 
   if (cleaned) {
     return cleaned;
@@ -823,6 +759,22 @@ function normalizeShortField(value, maxWords) {
   return limitWords(cleaned, maxWords);
 }
 
+function normalizePersonalizedLine(value, leadRecord) {
+  const cleaned = normalizeShortField(value, 10);
+
+  if (!cleaned) {
+    return "";
+  }
+
+  const normalized = lowercaseStart(cleaned);
+
+  if (containsCompanyReference(normalized, leadRecord)) {
+    return "";
+  }
+
+  return normalized;
+}
+
 function buildFallbackPainHook({ category, leadRecord }) {
   const location = getShortLocation(leadRecord);
   const portfolioLead = isPortfolioLead(leadRecord);
@@ -878,22 +830,11 @@ function buildFallbackPainHook({ category, leadRecord }) {
 
 function buildFallbackPersonalizedLine({ category, leadRecord }) {
   const location = getShortLocation(leadRecord);
-  const companyName = squashWhitespace(leadRecord.companyName);
   const portfolioLead = isPortfolioLead(leadRecord);
-  const useCompanyName = companyName && !looksLikeGenericCompanyName(companyName);
+  const descriptor = portfolioLead ? getPortfolioLabel(category) : getCategoryPlural(category);
+  const text = location ? `${descriptor} in ${location}` : `${descriptor} like yours`;
 
-  let text;
-
-  if (portfolioLead && useCompanyName) {
-    text = `${getPortfolioLabel(category)} like ${companyName}${location ? ` in ${location}` : ""}`;
-  } else if (useCompanyName) {
-    text = `${getCategoryPlural(category)} like ${companyName}${location ? ` in ${location}` : ""}`;
-  } else {
-    text = `${getCategoryPlural(category)} like yours${location ? ` in ${location}` : ""}`;
-  }
-
-  const cleaned = limitWords(text.toLowerCase(), 10);
-  return cleaned;
+  return normalizePersonalizedLine(text, leadRecord);
 }
 
 function getAuthorityLabel(title) {
@@ -1010,6 +951,48 @@ function looksLikeGenericCompanyName(companyName) {
   );
 }
 
+function containsCompanyReference(text, leadRecord) {
+  const haystack = squashWhitespace(text).toLowerCase();
+  const companyName = squashWhitespace(leadRecord.companyName).toLowerCase();
+
+  if (!haystack || !companyName) {
+    return false;
+  }
+
+  if (haystack.includes(companyName)) {
+    return true;
+  }
+
+  const genericTokens = new Set([
+    "group",
+    "holdings",
+    "holding",
+    "corporation",
+    "corp",
+    "company",
+    "co",
+    "international",
+    "global",
+    "limited",
+    "ltd",
+    "pcl",
+    "plc",
+    "hotel",
+    "resort",
+    "restaurant",
+    "restaurants",
+    "spa",
+    "studio"
+  ]);
+
+  const tokens = companyName
+    .split(/[^a-z0-9]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 4 && !genericTokens.has(token));
+
+  return tokens.some((token) => haystack.includes(token));
+}
+
 function isPortfolioLead(leadRecord) {
   const text = [
     leadRecord.companyName,
@@ -1037,6 +1020,16 @@ function getShortLocation(leadRecord) {
   }
 
   return squashWhitespace(raw.split(",")[0]);
+}
+
+function lowercaseStart(value) {
+  const text = squashWhitespace(value);
+
+  if (!text) {
+    return "";
+  }
+
+  return `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
 }
 
 function matchesAny(text, fragments) {
