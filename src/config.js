@@ -24,7 +24,8 @@ export async function loadConfig(cwd = process.cwd()) {
     maxOutreachLength: Number(parsed.maxOutreachLength || 500),
     notionToken: getEnvValue("NOTION_TOKEN") || null,
     notionDatabaseId: normalizeNotionDatabaseId(getEnvValue("NOTION_DATABASE_ID") || null),
-    promptFile: path.resolve(cwd, parsed.promptFile || "./config/prompt.txt"),
+    qualificationPromptFile: path.resolve(cwd, resolveQualificationPromptFile(parsed)),
+    dmPromptFile: path.resolve(cwd, parsed.dmPromptFile || "./config/DM.txt"),
     inputDir: path.resolve(cwd, parsed.inputDir || "./input"),
     processingDir: path.resolve(cwd, parsed.processingDir || "./processing"),
     outputDir: path.resolve(cwd, parsed.outputDir || "./output"),
@@ -38,6 +39,18 @@ export async function loadConfig(cwd = process.cwd()) {
   }
 
   return config;
+}
+
+function resolveQualificationPromptFile(parsed) {
+  if (parsed.qualificationPromptFile) {
+    return parsed.qualificationPromptFile;
+  }
+
+  if (parsed.promptFile && parsed.promptFile !== "./config/prompt.txt") {
+    return parsed.promptFile;
+  }
+
+  return "./config/Qualification.txt";
 }
 
 function parseRequestTimeout(value) {
@@ -85,11 +98,23 @@ export async function ensureRuntimeDirectories(config) {
 }
 
 export async function loadPrompt(config) {
-  const prompt = (await readFile(config.promptFile, "utf8")).trim();
+  const prompt = (await readFile(config.qualificationPromptFile, "utf8")).trim();
 
   if (!prompt || prompt.includes(PROMPT_PLACEHOLDER)) {
     throw new Error(
-      `Update ${config.promptFile} with your real qualification prompt before processing leads.`
+      `Update ${config.qualificationPromptFile} with your real qualification prompt before processing leads.`
+    );
+  }
+
+  return prompt;
+}
+
+export async function loadDmPrompt(config) {
+  const prompt = (await readFile(config.dmPromptFile, "utf8")).trim();
+
+  if (!prompt || prompt.includes(PROMPT_PLACEHOLDER)) {
+    throw new Error(
+      `Update ${config.dmPromptFile} with your real DM prompt before processing leads.`
     );
   }
 
