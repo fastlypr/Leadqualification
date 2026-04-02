@@ -6,7 +6,9 @@ const PROPERTY_NAMES = {
   leadCategory: "Lead category",
   industry: "Industry",
   qualification: "Qualification",
-  qualificationNote: "Qualification note"
+  qualificationNote: "Qualification note",
+  painHook: "Pain hook",
+  personalizedLine: "Personalized line"
 };
 
 export async function createNotionSync({ config, logger }) {
@@ -112,6 +114,8 @@ async function ensureDatabaseSchema(client, databaseId) {
   ensurePropertyType(database.properties, PROPERTY_NAMES.industry, "rich_text", updates);
   ensurePropertyType(database.properties, PROPERTY_NAMES.qualification, "rich_text", updates);
   ensurePropertyType(database.properties, PROPERTY_NAMES.qualificationNote, "rich_text", updates);
+  ensurePropertyType(database.properties, PROPERTY_NAMES.painHook, "rich_text", updates);
+  ensurePropertyType(database.properties, PROPERTY_NAMES.personalizedLine, "rich_text", updates);
 
   if (Object.keys(updates).length > 0) {
     await client.request("PATCH", `/databases/${databaseId}`, { properties: updates });
@@ -198,6 +202,12 @@ function buildPageProperties(titlePropertyName, record) {
     },
     [PROPERTY_NAMES.qualificationNote]: {
       rich_text: buildRichTextArray(record.qualification_note)
+    },
+    [PROPERTY_NAMES.painHook]: {
+      rich_text: buildRichTextArray(record.pain_hook)
+    },
+    [PROPERTY_NAMES.personalizedLine]: {
+      rich_text: buildRichTextArray(record.personalized_line)
     }
   };
 }

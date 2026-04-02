@@ -18,6 +18,8 @@ const OUTPUT_COLUMNS = [
   "lead_category",
   "qualification_status",
   "qualification_note",
+  "pain_hook",
+  "personalized_line",
   "processed_at",
   "processing_error"
 ];
@@ -29,6 +31,8 @@ const ICP_INPUT_FIELDS = [
   "companyName",
   "title",
   "industry",
+  "companyLocation",
+  "location",
   "summary",
   "titleDescription",
   "durationInRole",
@@ -194,6 +198,8 @@ async function processJob(state, promptText, config, logger, runState, notionSyn
         item.row.lead_category = result.lead_category;
         item.row.qualification_status = result.qualification_status;
         item.row.qualification_note = result.qualification_note;
+        item.row.pain_hook = result.pain_hook;
+        item.row.personalized_line = result.personalized_line;
         item.row.processing_error = "";
         item.row.processed_at = new Date().toISOString();
 

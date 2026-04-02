@@ -20,10 +20,14 @@ The worker keeps every original CSV column in its resume-safe working file and a
 - `lead_category`
 - `qualification_status`
 - `qualification_note`
+- `pain_hook`
+- `personalized_line`
 - `processed_at`
 - `processing_error`
 
 `lead_category` is now the most specific business type the model can confidently infer from the row, for example `Hotel`, `Restaurant`, `Cafe`, `Salon`, `Gym`, `Spa`, `Real Estate Developer`, or `Outside ICP`.
+
+`qualification_status` can now be `Qualified`, `Disqualified`, or `Needs Review`.
 
 ## Setup
 
@@ -74,6 +78,8 @@ When Notion sync is enabled, the worker will create or use these database proper
 - `Industry`
 - `Qualification`
 - `Qualification note`
+- `Pain hook`
+- `Personalized line`
 
 Leads are matched by `Lead URL`, which is filled from `defaultProfileUrl` when available.
 
@@ -109,6 +115,6 @@ node src/index.js 10
 
 ## Prompt Tips
 
-Your prompt should explain how you want leads categorized and what counts as `Qualified` or `Disqualified`.
+Your prompt should explain how you want leads categorized and what counts as `Qualified`, `Disqualified`, or `Needs Review`.
 
 The worker already forces JSON output internally, so your prompt can focus on qualification rules rather than response formatting.

@@ -1,8 +1,10 @@
 const RESPONSE_SCHEMA = {
   lead_category:
     "Hotel | Resort | Serviced Apartment | Villa | Hospitality Brand | Restaurant | Cafe | Bar | Cloud Kitchen | Dining Group | F&B Brand | Real Estate Developer | Property Group | Real Estate Agency | Project Launch | Salon | Gym | Spa | Studio | Wellness Brand | Lifestyle Brand | Outside ICP | Unclear",
-  qualification_status: "Qualified | Disqualified",
-  qualification_note: "short note explaining why"
+  qualification_status: "Qualified | Disqualified | Needs Review",
+  qualification_note: "one short concrete sentence explaining why",
+  pain_hook: "required only when qualification_status is Qualified or Needs Review",
+  personalized_line: "required only when qualification_status is Qualified or Needs Review"
 };
 
 export async function qualifyLead({ config, promptText, leadRecord }) {
@@ -62,10 +64,12 @@ function buildSystemPrompt() {
     "You qualify sales leads from CSV row data.",
     "Qualify the current business, not the audience they serve.",
     "If the current business is outside ICP, return qualification_status as Disqualified.",
-    "Only use the exact statuses Qualified or Disqualified.",
+    "Only use the exact statuses Qualified, Disqualified, or Needs Review.",
     "Only use the exact categories from the schema.",
     "qualification_note must cite a concrete row signal or a clearly missing signal.",
     "Never return a vague note like unclear, outside ICP, good fit, bad fit, or not a fit by itself.",
+    "If qualification_status is Qualified or Needs Review, also return pain_hook and personalized_line.",
+    "If qualification_status is Disqualified, omit pain_hook and personalized_line or return them as empty strings.",
     "Return only valid JSON.",
     "Do not wrap the JSON in markdown.",
     "Use this exact schema:",
@@ -81,7 +85,7 @@ function buildUserPrompt(promptText, leadRecord) {
     "Lead record:",
     JSON.stringify(leadRecord, null, 2),
     "",
-    "Return only JSON with the required keys. Keep `qualification_note` concise but specific."
+    "Return only JSON with the required keys. Keep qualification_note concise but specific."
   ].join("\n");
 }
 
@@ -193,11 +197,25 @@ function normalizeQualificationResult(result, config, leadRecord) {
     leadRecord,
     maxLength: config.maxNoteLength
   });
+  const painHook = buildPainHook({
+    rawPainHook: result.pain_hook ?? result.painHook ?? "",
+    status: status || "",
+    category: category || "Unclear",
+    leadRecord
+  });
+  const personalizedLine = buildPersonalizedLine({
+    rawPersonalizedLine: result.personalized_line ?? result.personalizedLine ?? "",
+    status: status || "",
+    category: category || "Unclear",
+    leadRecord
+  });
 
   return {
     lead_category: category || "Unclear",
     qualification_status: status || "",
-    qualification_note: note
+    qualification_note: note,
+    pain_hook: painHook,
+    personalized_line: personalizedLine
   };
 }
 
@@ -220,6 +238,15 @@ function normalizeStatus(value) {
     return "Disqualified";
   }
 
+  if (
+    normalized === "needs review" ||
+    normalized === "needs_review" ||
+    normalized === "review" ||
+    normalized === "manual review"
+  ) {
+    return "Needs Review";
+  }
+
   return "";
 }
 
@@ -231,6 +258,34 @@ function buildQualificationNote({ rawNote, status, category, leadRecord, maxLeng
   }
 
   return truncate(buildFallbackQualificationNote({ status, category, leadRecord }), maxLength);
+}
+
+function buildPainHook({ rawPainHook, status, category, leadRecord }) {
+  if (status === "Disqualified" || !status) {
+    return "";
+  }
+
+  const cleaned = normalizeShortField(rawPainHook, 15);
+
+  if (cleaned) {
+    return cleaned;
+  }
+
+  return buildFallbackPainHook({ category, leadRecord });
+}
+
+function buildPersonalizedLine({ rawPersonalizedLine, status, category, leadRecord }) {
+  if (status === "Disqualified" || !status) {
+    return "";
+  }
+
+  const cleaned = normalizeShortField(rawPersonalizedLine, 10);
+
+  if (cleaned) {
+    return cleaned;
+  }
+
+  return buildFallbackPersonalizedLine({ category, leadRecord });
 }
 
 function isVagueQualificationNote(note, leadRecord) {
@@ -277,6 +332,8 @@ function hasConcreteRowEvidence(note, leadRecord) {
     leadRecord.title,
     leadRecord.companyName,
     leadRecord.industry,
+    leadRecord.location,
+    leadRecord.companyLocation,
     leadRecord.firstName,
     leadRecord.lastName,
     leadRecord.fullName
@@ -291,6 +348,7 @@ function buildFallbackQualificationNote({ status, category, leadRecord }) {
   const title = squashWhitespace(leadRecord.title);
   const companyName = squashWhitespace(leadRecord.companyName);
   const industry = squashWhitespace(leadRecord.industry);
+  const portfolioLead = isPortfolioLead(leadRecord);
   const combinedText = [
     leadRecord.title,
     leadRecord.companyName,
@@ -312,6 +370,30 @@ function buildFallbackQualificationNote({ status, category, leadRecord }) {
       parts.push(`title "${title}" shows decision-making authority`);
     } else if (title) {
       parts.push(`title "${title}" still appears senior enough for outreach`);
+    }
+
+    if (portfolioLead) {
+      parts.push("high-value portfolio lead");
+    }
+
+    return joinReasonParts(parts);
+  }
+
+  if (status === "Needs Review") {
+    const parts = [businessEvidence];
+
+    if (looksLikeHoldingCompany(companyName)) {
+      parts.push("the company structure is diversified and operations need manual confirmation");
+    } else if (!authorityLabel && title) {
+      parts.push(`title "${title}" is borderline on final buying authority`);
+    } else if (industry && category !== "Outside ICP" && category !== "Unclear") {
+      parts.push(`industry "${industry}" conflicts with stronger operational signals`);
+    } else {
+      parts.push("the row shows strong ICP signals but one conflicting signal still needs review");
+    }
+
+    if (portfolioLead) {
+      parts.push("high-value portfolio lead");
     }
 
     return joinReasonParts(parts);
@@ -667,6 +749,89 @@ function formatCategoryLabel(category) {
     .toLowerCase();
 }
 
+function normalizeShortField(value, maxWords) {
+  const cleaned = squashWhitespace(value).replace(/^["']|["']$/g, "");
+
+  if (!cleaned) {
+    return "";
+  }
+
+  return limitWords(cleaned, maxWords);
+}
+
+function buildFallbackPainHook({ category, leadRecord }) {
+  const location = getShortLocation(leadRecord);
+  const portfolioLead = isPortfolioLead(leadRecord);
+  const family = getCategoryFamily(category);
+
+  if (portfolioLead && family === "hospitality") {
+    return limitWords(
+      withTrailingPeriod(
+        `OTA dependency across a growing hotel portfolio is draining margins at scale${location ? ` in ${location}` : ""}`
+      ),
+      15
+    );
+  }
+
+  if (family === "hospitality") {
+    return limitWords(
+      withTrailingPeriod(
+        `${category === "Resort" ? "Resorts" : "Hotels"}${location ? ` in ${location}` : ""} are stuck paying OTA commissions on every booking`
+      ),
+      15
+    );
+  }
+
+  if (family === "fnb") {
+    return limitWords(
+      withTrailingPeriod(
+        `${getCategoryPlural(category)}${location ? ` in ${location}` : ""} are leaving money on the table on quiet weekdays`
+      ),
+      15
+    );
+  }
+
+  if (family === "real_estate") {
+    return limitWords(
+      withTrailingPeriod(
+        `${getCategoryPlural(category)}${location ? ` in ${location}` : ""} are burning spend on low-intent portal leads`
+      ),
+      15
+    );
+  }
+
+  if (family === "lifestyle") {
+    return limitWords(
+      withTrailingPeriod(
+        `${getCategoryPlural(category)}${location ? ` in ${location}` : ""} rely on walk-ins with no predictable pipeline`
+      ),
+      15
+    );
+  }
+
+  return "";
+}
+
+function buildFallbackPersonalizedLine({ category, leadRecord }) {
+  const location = getShortLocation(leadRecord);
+  const companyName = squashWhitespace(leadRecord.companyName);
+  const portfolioLead = isPortfolioLead(leadRecord);
+  const useCompanyName = companyName && !looksLikeGenericCompanyName(companyName);
+
+  let text;
+
+  if (portfolioLead && useCompanyName) {
+    text = `${getPortfolioLabel(category)} like ${companyName}${location ? ` in ${location}` : ""}`;
+  } else if (useCompanyName) {
+    text = `${getCategoryPlural(category)} like ${companyName}${location ? ` in ${location}` : ""}`;
+  } else {
+    text = `${getCategoryPlural(category)} like yours${location ? ` in ${location}` : ""}`;
+  }
+
+  const cleaned = limitWords(text.toLowerCase(), 10);
+  return cleaned;
+}
+
 function getAuthorityLabel(title) {
   const normalized = squashWhitespace(title).toLowerCase();
 
@@ -685,6 +850,70 @@ function getAuthorityLabel(title) {
   return "";
 }
 
+function getCategoryFamily(category) {
+  if (["Hotel", "Resort", "Serviced Apartment", "Villa", "Hospitality Brand"].includes(category)) {
+    return "hospitality";
+  }
+
+  if (["Restaurant", "Cafe", "Bar", "Cloud Kitchen", "Dining Group", "F&B Brand"].includes(category)) {
+    return "fnb";
+  }
+
+  if (["Real Estate Developer", "Property Group", "Real Estate Agency", "Project Launch"].includes(category)) {
+    return "real_estate";
+  }
+
+  if (["Salon", "Gym", "Spa", "Studio", "Wellness Brand", "Lifestyle Brand"].includes(category)) {
+    return "lifestyle";
+  }
+
+  return "";
+}
+
+function getCategoryPlural(category) {
+  const map = new Map([
+    ["Hotel", "hotels"],
+    ["Resort", "resorts"],
+    ["Serviced Apartment", "serviced apartments"],
+    ["Villa", "villa brands"],
+    ["Hospitality Brand", "hospitality brands"],
+    ["Restaurant", "restaurants"],
+    ["Cafe", "cafes"],
+    ["Bar", "bars"],
+    ["Cloud Kitchen", "cloud kitchens"],
+    ["Dining Group", "dining groups"],
+    ["F&B Brand", "F&B brands"],
+    ["Real Estate Developer", "developers"],
+    ["Property Group", "property groups"],
+    ["Real Estate Agency", "real estate agencies"],
+    ["Project Launch", "project launches"],
+    ["Salon", "salons"],
+    ["Gym", "gyms"],
+    ["Spa", "spas"],
+    ["Studio", "studios"],
+    ["Wellness Brand", "wellness brands"],
+    ["Lifestyle Brand", "lifestyle brands"]
+  ]);
+
+  return map.get(category) || "brands";
+}
+
+function getPortfolioLabel(category) {
+  if (getCategoryFamily(category) === "hospitality") {
+    return "hospitality groups";
+  }
+
+  if (getCategoryFamily(category) === "fnb") {
+    return "restaurant groups";
+  }
+
+  if (getCategoryFamily(category) === "real_estate") {
+    return "property groups";
+  }
+
+  return getCategoryPlural(category);
+}
+
 function looksLikeLowAuthority(title) {
   const normalized = squashWhitespace(title).toLowerCase();
 
@@ -695,6 +924,55 @@ function looksLikeLowAuthority(title) {
   return /(intern|assistant|coordinator|analyst|executive|associate|specialist|trainee|representative)/.test(
     normalized
   );
+}
+
+function looksLikeHoldingCompany(companyName) {
+  const normalized = squashWhitespace(companyName).toLowerCase();
+
+  return /(group|holdings|holding|corporation|corp|public company|international|pcl|plc|limited|ltd)/.test(
+    normalized
+  );
+}
+
+function looksLikeGenericCompanyName(companyName) {
+  const normalized = squashWhitespace(companyName).toLowerCase();
+
+  return (
+    normalized.length < 4 ||
+    /^(self-employed|self employed|stealth|confidential)$/i.test(normalized) ||
+    /(group|holdings|holding|corporation|corp|company|co\.|international|global|limited|ltd|pcl|plc)$/.test(
+      normalized
+    )
+  );
+}
+
+function isPortfolioLead(leadRecord) {
+  const text = [
+    leadRecord.companyName,
+    leadRecord.title,
+    leadRecord.summary,
+    leadRecord.titleDescription
+  ]
+    .map((value) => squashWhitespace(value).toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+
+  return /(portfolio|multi-property|multi property|multi-location|multi location|hotel group|hospitality group|restaurant group|property group|multiple properties|multiple venues|11 destinations|network|group)/.test(
+    text
+  );
+}
+
+function getShortLocation(leadRecord) {
+  const raw = firstNonEmpty([
+    leadRecord.location,
+    leadRecord.companyLocation
+  ]);
+
+  if (!raw) {
+    return "";
+  }
+
+  return squashWhitespace(raw.split(",")[0]);
 }
 
 function matchesAny(text, fragments) {
@@ -711,6 +989,38 @@ function joinReasonParts(parts) {
   const sentence = cleaned.join(", ");
 
   return sentence.endsWith(".") ? sentence : `${sentence}.`;
+}
+
+function firstNonEmpty(values) {
+  for (const value of values) {
+    const text = squashWhitespace(value);
+
+    if (text) {
+      return text;
+    }
+  }
+
+  return "";
+}
+
+function limitWords(value, maxWords) {
+  const words = squashWhitespace(value).split(" ").filter(Boolean);
+
+  if (words.length <= maxWords) {
+    return squashWhitespace(value);
+  }
+
+  return words.slice(0, maxWords).join(" ");
+}
+
+function withTrailingPeriod(value) {
+  const text = squashWhitespace(value);
+
+  if (!text) {
+    return "";
+  }
+
+  return /[.!?]$/.test(text) ? text : `${text}.`;
 }
 
 function truncate(value, maxLength) {
