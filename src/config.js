@@ -16,7 +16,7 @@ export async function loadConfig(cwd = process.cwd()) {
     envPath,
     settingsPath,
     ollamaUrl: getEnvValue("OLLAMA_URL") || parsed.ollamaUrl,
-    model: getEnvValue("OLLAMA_MODEL") || getEnvValue("MODEL") || parsed.model || "mistral",
+    model: getEnvValue("OLLAMA_MODEL") || getEnvValue("MODEL") || parsed.model || "llama3:8b",
     requestTimeoutMs: parseRequestTimeout(
       getEnvValue("REQUEST_TIMEOUT_MS") ?? parsed.requestTimeoutMs
     ),
