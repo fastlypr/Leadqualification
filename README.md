@@ -2,7 +2,7 @@
 
 This is a simple folder-based script for qualifying leads from CSV files.
 
-You do not need a frontend. You drop a CSV into `input/`, keep your prompts in `config/Qualification.txt` and `config/DM.txt`, and run the worker. It processes one lead at a time and syncs qualified results into Notion when `NOTION_TOKEN` and `NOTION_DATABASE_ID` are set.
+You do not need a frontend. You drop a CSV into `input/`, add your custom prompt to `config/prompt.txt`, and run the worker. It processes one lead at a time and syncs qualified results into Notion when `NOTION_TOKEN` and `NOTION_DATABASE_ID` are set.
 
 ## Folder Flow
 
@@ -46,7 +46,7 @@ Useful `.env` keys:
 - `NOTION_DATABASE_ID`
 
 2. Edit [config/settings.json](/Users/vipankumar/Desktop/Lead%20Qualifier/config/settings.json) if you want a different default model, endpoint, or timeout. Values in `.env` override `config/settings.json`.
-3. Update [config/Qualification.txt](/Users/vipankumar/Desktop/Lead%20Qualifier/config/Qualification.txt) with your qualification prompt and [config/DM.txt](/Users/vipankumar/Desktop/Lead%20Qualifier/config/DM.txt) with your DM-personalization prompt.
+3. Replace the placeholder text in [config/prompt.txt](/Users/vipankumar/Desktop/Lead%20Qualifier/config/prompt.txt) with your lead qualification prompt.
 4. Drop one or more `.csv` files into [input](/Users/vipankumar/Desktop/Lead%20Qualifier/input).
 
 ## Ubuntu Secret Setup
@@ -100,7 +100,6 @@ node src/index.js 10
 ## Important Behavior
 
 - Requests are fully sequential. The script waits for one lead to finish before sending the next request.
-- Each lead now runs as a two-step flow: qualification first, then DM field generation only for `Qualified` or `Needs Review` leads.
 - Progress is saved after every lead by rewriting the working CSV in `processing/`.
 - If the script stops halfway through, rerun it and it will resume from the saved state file.
 - If one lead fails, that row gets a `processing_error` value and the worker continues to the next lead.
@@ -116,6 +115,6 @@ node src/index.js 10
 
 ## Prompt Tips
 
-Your qualification prompt should explain how you want leads categorized and what counts as `Qualified`, `Disqualified`, or `Needs Review`. Your DM prompt should focus only on generating `pain_hook` and `personalized_line` from already-qualified leads.
+Your prompt should explain how you want leads categorized and what counts as `Qualified`, `Disqualified`, or `Needs Review`.
 
 The worker already forces JSON output internally, so your prompt can focus on qualification rules rather than response formatting.
