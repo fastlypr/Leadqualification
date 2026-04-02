@@ -4,6 +4,8 @@ This is a simple folder-based script for qualifying leads from CSV files.
 
 You do not need a frontend. You drop a CSV into `input/`, add your custom prompt to `config/prompt.txt`, and run the worker. It processes one lead at a time and syncs qualified results into Notion when `NOTION_TOKEN` and `NOTION_DATABASE_ID` are set.
 
+There is also a separate Notion-based DM personalizer script. It reads existing pages from a Notion database, generates `Pain hook` and `Personalized line`, and writes them back to Notion using [config/dm_personalizer_prompt.txt](/Users/vipankumar/Desktop/Lead%20Qualifier/config/dm_personalizer_prompt.txt).
+
 ## Folder Flow
 
 - `input/` - drop raw lead CSV files here
@@ -95,6 +97,29 @@ To process only the first 10 leads:
 
 ```bash
 node src/index.js 10
+```
+
+## DM Personalizer
+
+The separate DM worker uses this default Notion database:
+
+- `3359a2df-3f5c-8033-83e2-e639ed9dd635`
+
+It automatically creates these properties if missing:
+
+- `Pain hook`
+- `Personalized line`
+
+Add your DM prompt to [config/dm_personalizer_prompt.txt](/Users/vipankumar/Desktop/Lead%20Qualifier/config/dm_personalizer_prompt.txt), then run:
+
+```bash
+npm run personalize-dm
+```
+
+To process only the first 10 eligible Notion pages:
+
+```bash
+node src/dm-index.js 10
 ```
 
 ## Important Behavior
