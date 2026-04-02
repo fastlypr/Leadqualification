@@ -1,13 +1,65 @@
-const RESPONSE_SCHEMA = {
+const QUALIFICATION_SCHEMA = {
   lead_category:
     "Hotel | Resort | Serviced Apartment | Villa | Hospitality Brand | Restaurant | Cafe | Bar | Cloud Kitchen | Dining Group | F&B Brand | Real Estate Developer | Property Group | Real Estate Agency | Project Launch | Salon | Gym | Spa | Studio | Wellness Brand | Lifestyle Brand | Outside ICP | Unclear",
   qualification_status: "Qualified | Disqualified | Needs Review",
-  qualification_note: "one short concrete sentence explaining why",
-  pain_hook: "required only when qualification_status is Qualified or Needs Review",
-  personalized_line: "required only when qualification_status is Qualified or Needs Review"
+  qualification_note: "one short concrete sentence explaining why"
+};
+
+const DM_SCHEMA = {
+  pain_hook: "required for Qualified or Needs Review leads",
+  personalized_line: "required for Qualified or Needs Review leads"
 };
 
 export async function qualifyLead({ config, promptText, leadRecord }) {
+  const parsed = await requestStructuredOutput({
+    config,
+    promptText,
+    leadRecord,
+    schema: QUALIFICATION_SCHEMA,
+    systemInstructions: [
+      "You qualify sales leads from CSV row data.",
+      "Qualify the current business, not the audience they serve.",
+      "If the current business is outside ICP, return qualification_status as Disqualified.",
+      "Only use the exact statuses Qualified, Disqualified, or Needs Review.",
+      "Only use the exact categories from the schema.",
+      "qualification_note must cite a concrete row signal or a clearly missing signal.",
+      "Never return a vague note like unclear, outside ICP, good fit, bad fit, or not a fit by itself."
+    ],
+    finalInstruction:
+      "Return only JSON with lead_category, qualification_status, and qualification_note."
+  });
+
+  return normalizeQualificationResult(parsed, config, leadRecord);
+}
+
+export async function generateDmFields({ config, promptText, leadRecord }) {
+  const parsed = await requestStructuredOutput({
+    config,
+    promptText,
+    leadRecord,
+    schema: DM_SCHEMA,
+    systemInstructions: [
+      "You write DM personalization fields from CSV row data.",
+      "Use the qualification result already provided in the lead record.",
+      "Only write pain_hook and personalized_line.",
+      "If the lead is Disqualified, return empty strings for both fields.",
+      "Do not invent facts or locations."
+    ],
+    finalInstruction:
+      "Return only JSON with pain_hook and personalized_line."
+  });
+
+  return normalizeDmFields(parsed, leadRecord);
+}
+
+async function requestStructuredOutput({
+  config,
+  promptText,
+  leadRecord,
+  schema,
+  systemInstructions,
+  finalInstruction
+}) {
   const controller = config.requestTimeoutMs ? new AbortController() : null;
   const timeout = config.requestTimeoutMs
     ? setTimeout(() => controller.abort(), config.requestTimeoutMs)
@@ -25,11 +77,11 @@ export async function qualifyLead({ config, promptText, leadRecord }) {
         messages: [
           {
             role: "system",
-            content: buildSystemPrompt()
+            content: buildSystemPrompt(systemInstructions, schema)
           },
           {
             role: "user",
-            content: buildUserPrompt(promptText, leadRecord)
+            content: buildUserPrompt(promptText, leadRecord, finalInstruction)
           }
         ]
       }),
@@ -45,7 +97,7 @@ export async function qualifyLead({ config, promptText, leadRecord }) {
     const content = getAssistantContent(payload);
     const parsed = parseModelJson(content);
 
-    return normalizeQualificationResult(parsed, config, leadRecord);
+    return parsed;
   } catch (error) {
     if (error.name === "AbortError") {
       throw new Error(`Ollama request timed out after ${config.requestTimeoutMs}ms.`);
@@ -59,33 +111,25 @@ export async function qualifyLead({ config, promptText, leadRecord }) {
   }
 }
 
-function buildSystemPrompt() {
+function buildSystemPrompt(instructions, schema) {
   return [
-    "You qualify sales leads from CSV row data.",
-    "Qualify the current business, not the audience they serve.",
-    "If the current business is outside ICP, return qualification_status as Disqualified.",
-    "Only use the exact statuses Qualified, Disqualified, or Needs Review.",
-    "Only use the exact categories from the schema.",
-    "qualification_note must cite a concrete row signal or a clearly missing signal.",
-    "Never return a vague note like unclear, outside ICP, good fit, bad fit, or not a fit by itself.",
-    "If qualification_status is Qualified or Needs Review, also return pain_hook and personalized_line.",
-    "If qualification_status is Disqualified, omit pain_hook and personalized_line or return them as empty strings.",
+    ...instructions,
     "Return only valid JSON.",
     "Do not wrap the JSON in markdown.",
     "Use this exact schema:",
-    JSON.stringify(RESPONSE_SCHEMA, null, 2)
+    JSON.stringify(schema, null, 2)
   ].join("\n");
 }
 
-function buildUserPrompt(promptText, leadRecord) {
+function buildUserPrompt(promptText, leadRecord, finalInstruction) {
   return [
-    "Follow these lead qualification rules exactly:",
+    "Follow these instructions exactly:",
     promptText,
     "",
     "Lead record:",
     JSON.stringify(leadRecord, null, 2),
     "",
-    "Return only JSON with the required keys. Keep qualification_note concise but specific."
+    finalInstruction
   ].join("\n");
 }
 
@@ -213,7 +257,27 @@ function normalizeQualificationResult(result, config, leadRecord) {
   return {
     lead_category: category || "Unclear",
     qualification_status: status || "",
-    qualification_note: note,
+    qualification_note: note
+  };
+}
+
+function normalizeDmFields(result, leadRecord) {
+  const status = normalizeStatus(leadRecord.qualification_status ?? leadRecord.status);
+  const category = normalizeCategory(leadRecord.lead_category ?? leadRecord.category);
+  const painHook = buildPainHook({
+    rawPainHook: result.pain_hook ?? result.painHook ?? "",
+    status: status || "",
+    category: category || "Unclear",
+    leadRecord
+  });
+  const personalizedLine = buildPersonalizedLine({
+    rawPersonalizedLine: result.personalized_line ?? result.personalizedLine ?? "",
+    status: status || "",
+    category: category || "Unclear",
+    leadRecord
+  });
+
+  return {
     pain_hook: painHook,
     personalized_line: personalizedLine
   };
