@@ -48,7 +48,7 @@ Lifestyle pain: Relying on walk-ins with no pipeline, boosting posts with no tra
 Portfolio leads: Reference scale pain, not single-property pain.
 
 personalized_line Rules
-Starts lowercase. Placed after "We're helping" in the DM. Use location only if in data. Include company name if it identifies a property/venue/brand. If generic company name, use "hotels like yours" etc. For groups, reference the group name.
+Starts lowercase. Placed after "We're helping" in the DM. Use location only if in data. Never use the company name, brand name, property name, or group name in the personalized_line. Instead describe the business type and location only. Example: "luxury resorts in Phuket" not "resorts like Keemala in Phuket." If no location is available, use "luxury resorts like yours" or "hotels like yours."
 
 DM Template (for reference only)
 Hi {first_name},
@@ -69,7 +69,14 @@ lead_category: Hospitality Brand
 qualification_status: Qualified
 qualification_note: GM at Boutique Corporation operates hotels despite Real Estate tag. Portfolio lead.
 pain_hook: Most hotel operators in Bangkok are losing 15 to 25% of revenue to OTA commissions.
-personalized_line: hospitality groups like Boutique Corporation in Bangkok
+personalized_line: hospitality groups in Bangkok
+1b. Hotel group / management company
+Row: VP Operations, Absolute Hotel Services, Hospitality, Bangkok
+lead_category: Hospitality Brand
+qualification_status: Qualified
+qualification_note: VP Operations at Absolute Hotel Services, a hotel management group. Portfolio lead.
+pain_hook: OTA dependency across a growing hotel portfolio hits margins at scale not just one property.
+personalized_line: hotel management groups in Bangkok
 2. Agency — Disqualified
 Row: CEO, Digital Marketing Solutions Co, Marketing, Dubai
 lead_category: Outside ICP
@@ -81,14 +88,14 @@ lead_category: Restaurant
 qualification_status: Qualified
 qualification_note: Owner of Ember Bangkok restaurant with decision-making authority.
 pain_hook: Empty weeknight tables while weekends are packed is costing Bangkok restaurants real revenue.
-personalized_line: restaurants like Ember in Bangkok
+personalized_line: restaurants in Bangkok
 4. Luxury resort GM
 Row: GM, Keemala Beyond Enchanting, Hospitality, Phuket
 lead_category: Resort
 qualification_status: Qualified
 qualification_note: GM of Keemala luxury resort in Phuket with decision-making authority.
 pain_hook: Most luxury resorts in Phuket are losing 15 to 25% of every booking to OTA commissions.
-personalized_line: luxury resorts like Keemala in Phuket
+personalized_line: luxury resorts in Phuket
 5. Student
 Row: Hospitality Management Student, Cornell University, Higher Education, New York
 lead_category: Outside ICP
@@ -114,29 +121,29 @@ Row: Director, Minor International PCL, Food and Beverages, Bangkok
 lead_category: Hospitality Brand
 qualification_status: Needs Review
 qualification_note: Director at Minor International, diversified group operating hotels. Borderline authority. Portfolio lead if confirmed.
-pain_hook: OTA dependency across a portfolio like Minor hits margins at scale not just one property.
-personalized_line: hospitality groups like Minor International in Bangkok
+pain_hook: OTA dependency across a multi-property portfolio hits margins at scale not just one hotel.
+personalized_line: hospitality groups in Bangkok
 10. Real estate developer
 Row: CEO, Sansiri PCL, Real Estate, Bangkok
 lead_category: Real Estate Developer
 qualification_status: Qualified
 qualification_note: CEO of Sansiri, major developer in Bangkok. Portfolio lead.
 pain_hook: Spending on portals and getting leads the sales team can't close is draining margins.
-personalized_line: developers like Sansiri in Bangkok
+personalized_line: developers in Bangkok
 11. Resort GM, no location
 Row: GM, The Kee Resort & Spa, Hospitality, blank
 lead_category: Resort
 qualification_status: Qualified
 qualification_note: GM of The Kee Resort & Spa with decision-making authority.
 pain_hook: Most 4-star resorts are stuck paying OTA commissions with no system to drive direct bookings.
-personalized_line: 4-star resorts like The Kee Resort
+personalized_line: 4-star resorts like yours
 12. Wellness studio
 Row: Founder, Refresh Wellness Studio, Wellness and Fitness, Phuket
 lead_category: Wellness Brand
 qualification_status: Qualified
 qualification_note: Founder of Refresh Wellness Studio in Phuket with decision-making authority.
 pain_hook: Relying on walk-ins with no predictable pipeline makes scaling a wellness studio nearly impossible.
-personalized_line: wellness studios like Refresh Wellness in Phuket
+personalized_line: wellness studios in Phuket
 13. F&B, minimal info
 Row: Owner, blank company, Food and Beverages, Bangkok
 lead_category: F&B Brand
@@ -151,4 +158,5 @@ qualification_status: Needs Review
 qualification_note: Headline suggests senior hospitality experience but no company or title to confirm.
 pain_hook: Most luxury hotels are stuck paying OTA commissions with no system to drive direct bookings.
 personalized_line: luxury hotels like yours
+
 
