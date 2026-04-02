@@ -1,7 +1,8 @@
 import path from "node:path";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { setDefaultResultOrder } from "node:dns";
 import { ensureRuntimeDirectories, loadConfig, PROMPT_PLACEHOLDER } from "./config.js";
+import { parseCsv } from "./csv.js";
 import { createLogger } from "./logger.js";
 import { createDmNotionSync } from "./notion-dm.js";
 
@@ -26,6 +27,7 @@ try {
   );
 
   const promptText = await loadDmPersonalizerPrompt(config.promptFile);
+  const csvLeadIndex = await loadCsvLeadIndex({ config: baseConfig, dmConfig: config, logger });
   const notionSync = await createDmNotionSync({
     notionToken: baseConfig.notionToken,
     databaseId: config.databaseId,
@@ -39,14 +41,21 @@ try {
   }
 
   await logger.info(`Queued ${pages.length} Notion lead(s) for DM personalization.`);
+  let matchedCount = 0;
 
   for (let index = 0; index < pages.length; index += 1) {
     const page = pages[index];
-    const record = notionSync.flattenPage(page);
+    const notionRecord = notionSync.flattenPage(page);
+    const csvRecord = findCsvRecord(csvLeadIndex, notionRecord);
+    const record = buildDmLeadRecord(notionRecord, csvRecord);
     const label = describeNotionLead(record);
 
+    if (csvRecord) {
+      matchedCount += 1;
+    }
+
     await logger.info(
-      `Processing DM row ${index + 1}/${pages.length}${label ? ` (${label})` : ""}.`
+      `Processing DM row ${index + 1}/${pages.length}${label ? ` (${label})` : ""}${csvRecord ? " [csv matched]" : " [notion only]"}.`
     );
 
     try {
@@ -67,6 +76,7 @@ try {
     }
   }
 
+  await logger.info(`DM personalization matched ${matchedCount}/${pages.length} Notion lead(s) to the raw CSV by LinkedIn URL.`);
   await logger.info("DM personalization run finished.");
   process.exit(0);
 } catch (error) {
@@ -85,7 +95,10 @@ async function buildDmConfig(baseConfig) {
 
   return {
     promptFile,
-    databaseId
+    databaseId,
+    sourceCsvPath: process.env.DM_SOURCE_CSV
+      ? path.resolve(baseConfig.cwd, process.env.DM_SOURCE_CSV)
+      : null
   };
 }
 
@@ -155,6 +168,155 @@ async function generateDmFields({ config, promptText, leadRecord }) {
       clearTimeout(timeout);
     }
   }
+}
+
+async function loadCsvLeadIndex({ config, dmConfig, logger }) {
+  const sourceCsvPath = await resolveSourceCsvPath({ config, dmConfig });
+
+  if (!sourceCsvPath) {
+    await logger.info("No raw CSV source found for DM personalization. Using Notion-only fields.");
+    return new Map();
+  }
+
+  const text = await readFile(sourceCsvPath, "utf8");
+  const { records } = parseCsv(text);
+  const index = new Map();
+
+  for (const record of records) {
+    for (const url of extractLinkedInUrls(record)) {
+      index.set(url, record);
+    }
+  }
+
+  await logger.info(
+    `Loaded ${records.length} raw CSV lead(s) for DM personalization from ${path.basename(sourceCsvPath)}.`
+  );
+
+  return index;
+}
+
+async function resolveSourceCsvPath({ config, dmConfig }) {
+  if (dmConfig.sourceCsvPath) {
+    return dmConfig.sourceCsvPath;
+  }
+
+  const candidates = [
+    ...(await listCsvFiles(config.inputDir)),
+    ...(await listOriginalCsvFiles(config.processingDir)),
+    ...(await listCsvFiles(config.doneDir))
+  ];
+
+  return candidates[0] || "";
+}
+
+async function listCsvFiles(dirPath) {
+  try {
+    const entries = await readdir(dirPath, { withFileTypes: true });
+
+    return entries
+      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".csv"))
+      .map((entry) => path.join(dirPath, entry.name))
+      .sort((left, right) => left.localeCompare(right));
+  } catch {
+    return [];
+  }
+}
+
+async function listOriginalCsvFiles(dirPath) {
+  try {
+    const entries = await readdir(dirPath, { withFileTypes: true });
+
+    return entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".original.csv"))
+      .map((entry) => path.join(dirPath, entry.name))
+      .sort((left, right) => left.localeCompare(right));
+  } catch {
+    return [];
+  }
+}
+
+function findCsvRecord(index, notionRecord) {
+  for (const url of extractLinkedInUrls(notionRecord)) {
+    const record = index.get(url);
+
+    if (record) {
+      return record;
+    }
+  }
+
+  return null;
+}
+
+function buildDmLeadRecord(notionRecord, csvRecord) {
+  const firstName = firstNonEmpty([
+    csvRecord?.firstName,
+    notionRecord["First name"],
+    splitFullName(getFullName(notionRecord, csvRecord)).firstName
+  ]);
+  const lastName = firstNonEmpty([
+    csvRecord?.lastName,
+    notionRecord["Last name"],
+    splitFullName(getFullName(notionRecord, csvRecord)).lastName
+  ]);
+  const fullName = getFullName(notionRecord, csvRecord);
+  const companyName = firstNonEmpty([
+    csvRecord?.companyName,
+    notionRecord["Company Name"],
+    notionRecord.Company
+  ]);
+  const title = firstNonEmpty([
+    csvRecord?.title,
+    notionRecord["Job Title"],
+    notionRecord.Title
+  ]);
+  const industry = firstNonEmpty([
+    csvRecord?.industry,
+    notionRecord.Industry
+  ]);
+  const location = firstNonEmpty([
+    csvRecord?.location,
+    notionRecord.Location,
+    csvRecord?.companyLocation,
+    notionRecord["Company Location"]
+  ]);
+  const leadUrl = firstNonEmpty([
+    notionRecord["Lead URL"],
+    csvRecord?.defaultProfileUrl,
+    csvRecord?.linkedInProfileUrl,
+    csvRecord?.profileUrl,
+    notionRecord.notion_url
+  ]);
+
+  return compactRecord({
+    ...notionRecord,
+    ...(csvRecord || {}),
+    fullName,
+    firstName,
+    lastName,
+    first_name: firstName,
+    last_name: lastName,
+    companyName,
+    company_name: companyName,
+    title,
+    job_title: title,
+    industry,
+    location,
+    companyLocation: firstNonEmpty([csvRecord?.companyLocation, notionRecord["Company Location"]]),
+    company_location: firstNonEmpty([csvRecord?.companyLocation, notionRecord["Company Location"]]),
+    titleDescription: firstNonEmpty([csvRecord?.titleDescription, notionRecord["Title Description"]]),
+    title_description: firstNonEmpty([csvRecord?.titleDescription, notionRecord["Title Description"]]),
+    summary: firstNonEmpty([csvRecord?.summary, notionRecord.Summary]),
+    durationInRole: firstNonEmpty([csvRecord?.durationInRole, notionRecord["Duration In Role"]]),
+    duration_in_role: firstNonEmpty([csvRecord?.durationInRole, notionRecord["Duration In Role"]]),
+    durationInCompany: firstNonEmpty([csvRecord?.durationInCompany, notionRecord["Duration In Company"]]),
+    duration_in_company: firstNonEmpty([csvRecord?.durationInCompany, notionRecord["Duration In Company"]]),
+    leadUrl,
+    lead_url: leadUrl,
+    lead_category: firstNonEmpty([notionRecord["Lead category"], csvRecord?.lead_category]),
+    qualification_status: firstNonEmpty([notionRecord.Qualification, csvRecord?.qualification_status]),
+    qualification_note: firstNonEmpty([notionRecord["Qualification note"], csvRecord?.qualification_note]),
+    csv_match_status: csvRecord ? "matched" : "not_found"
+  });
 }
 
 function buildSystemPrompt() {
@@ -285,6 +447,7 @@ function normalizeShortField(value, maxWords) {
 function describeNotionLead(record) {
   const candidates = [
     record.Name,
+    record.fullName,
     record["Full name"],
     record["Company Name"],
     record["Lead URL"]
@@ -340,6 +503,86 @@ function normalizeNotionDatabaseId(value) {
     compact.slice(16, 20),
     compact.slice(20)
   ].join("-");
+}
+
+function extractLinkedInUrls(record) {
+  const urls = [
+    record?.defaultProfileUrl,
+    record?.linkedInProfileUrl,
+    record?.profileUrl,
+    record?.leadUrl,
+    record?.lead_url,
+    record?.["Lead URL"]
+  ]
+    .map(normalizeLinkedInUrl)
+    .filter(Boolean);
+
+  return [...new Set(urls)];
+}
+
+function normalizeLinkedInUrl(value) {
+  const text = String(value || "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  return text
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split("?")[0]
+    .split("#")[0]
+    .replace(/\/+$/, "");
+}
+
+function compactRecord(record) {
+  const nextRecord = {};
+
+  for (const [key, value] of Object.entries(record)) {
+    if (String(value ?? "").trim()) {
+      nextRecord[key] = value;
+    }
+  }
+
+  return nextRecord;
+}
+
+function getFullName(notionRecord, csvRecord) {
+  return firstNonEmpty([
+    csvRecord?.fullName,
+    notionRecord.Name,
+    notionRecord["Full name"],
+    [csvRecord?.firstName, csvRecord?.lastName].filter(Boolean).join(" "),
+    csvRecord?.companyName
+  ]);
+}
+
+function splitFullName(fullName) {
+  const text = String(fullName || "").trim();
+
+  if (!text) {
+    return { firstName: "", lastName: "" };
+  }
+
+  const parts = text.split(/\s+/);
+
+  return {
+    firstName: parts[0] || "",
+    lastName: parts.slice(1).join(" ")
+  };
+}
+
+function firstNonEmpty(values) {
+  for (const value of values) {
+    const text = String(value || "").trim();
+
+    if (text) {
+      return text;
+    }
+  }
+
+  return "";
 }
 
 function truncate(value, maxLength) {

@@ -110,6 +110,24 @@ It automatically creates these properties if missing:
 - `Pain hook`
 - `Personalized line`
 
+It also tries to load your raw leads CSV and match Notion pages by LinkedIn URL so the AI can use richer source fields like:
+
+- `location`
+- `companyLocation`
+- `summary`
+- `titleDescription`
+- `industry`
+- `durationInRole`
+- `durationInCompany`
+
+Default CSV lookup order:
+
+- `input/*.csv`
+- `processing/*.original.csv`
+- `done/*.csv`
+
+You can override the source CSV path with `DM_SOURCE_CSV` in `.env`.
+
 Add your DM prompt to [config/dm_personalizer_prompt.txt](/Users/vipankumar/Desktop/Lead%20Qualifier/config/dm_personalizer_prompt.txt), then run:
 
 ```bash
