@@ -17,6 +17,9 @@ export async function loadConfig(cwd = process.cwd()) {
     settingsPath,
     ollamaUrl: getEnvValue("OLLAMA_URL") || parsed.ollamaUrl,
     model: getEnvValue("OLLAMA_MODEL") || getEnvValue("MODEL") || parsed.model || "llama3:8b",
+    googleSheetUrl: getEnvValue("LEADS_GOOGLE_SHEET_URL") || parsed.googleSheetUrl || null,
+    googleSheetFileName:
+      getEnvValue("LEADS_GOOGLE_SHEET_FILE") || parsed.googleSheetFileName || "google-sheet-leads.csv",
     requestTimeoutMs: parseRequestTimeout(
       getEnvValue("REQUEST_TIMEOUT_MS") ?? parsed.requestTimeoutMs
     ),

@@ -65,6 +65,10 @@ Return strict JSON only. No markdown, no explanation, no extra text. Use this fo
 ```
 
 lead_category = one from categories list. qualification_status = Qualified, Disqualified, or Needs Review. qualification_note = one sentence with specific signal. pain_hook = max 15 words, empty string if Disqualified. personalized_line = max 10 words, empty string if Disqualified.
+Always return all 5 JSON keys exactly: lead_category, qualification_status, qualification_note, pain_hook, personalized_line.
+lead_category must never be a job title. Invalid examples: Resort Manager, General Manager, Founder, CEO, Director.
+Do not copy locations, company names, or phrases from the examples. Use only the current row data.
+If location is missing, never invent a city or region from examples.
 
 ---
 

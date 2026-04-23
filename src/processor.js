@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import { loadPrompt } from "./config.js";
 import { mergeHeaders, parseCsv, stringifyCsv } from "./csv.js";
+import { importGoogleSheetIntoInput } from "./google-sheet.js";
 import { createNotionSync } from "./notion.js";
 import { qualifyLead } from "./ollama.js";
 import { createTaskQueue } from "./queue.js";
@@ -41,12 +42,17 @@ const ICP_INPUT_FIELDS = [
 
 export async function processPendingFiles({ config, logger, maxLeads = null }) {
   const resumableStatePaths = await listStateFiles(config.processingDir);
-  const inputCsvPaths = await listCsvFiles(config.inputDir);
+  let inputCsvPaths = await listCsvFiles(config.inputDir);
   const runState = {
     maxLeads,
     processedLeadCount: 0,
     remainingLeadCount: Number.isInteger(maxLeads) ? maxLeads : Number.POSITIVE_INFINITY
   };
+
+  if (resumableStatePaths.length === 0 && inputCsvPaths.length === 0 && config.googleSheetUrl) {
+    await importGoogleSheetIntoInput({ config, logger });
+    inputCsvPaths = await listCsvFiles(config.inputDir);
+  }
 
   if (resumableStatePaths.length === 0 && inputCsvPaths.length === 0) {
     await logger.info("No CSV files waiting in input/ or processing/.");

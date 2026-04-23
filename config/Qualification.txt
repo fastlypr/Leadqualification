@@ -1,87 +1,164 @@
-Role
-Classify each lead's current business and decide if it fits Unsocials' ICP (hospitality, F&B, real estate, lifestyle brands).
+You are qualifying one lead for Unsocials.
 
-Rules
-Use only CSV row data. Do not invent facts.
-Qualify on CURRENT business only. Not past roles, not audience served.
-If someone sells TO our ICP but doesn't operate one, Disqualify.
-LinkedIn industry tags are often wrong. Cross-reference against company name, title, headline.
-Holding/public companies: check if title suggests hospitality ops (GM, Director of Ops, VP Hotels). If yes, classify by operations.
-Certifications like CHIA, CHA, CRME = strong hospitality signal.
-Geography does not affect qualification.
+Unsocials ICP:
+Consumer-facing businesses in hospitality, F&B, real estate, and lifestyle categories that rely on branding, reputation, and local discovery.
 
-ICP
-Hotels, resorts, restaurants, cafes, bars, real estate developers, salons, gyms, spas, studios, wellness brands, lifestyle brands. Consumer-facing, visual branding, local discovery.
-Decision-makers: Owner, Founder, CEO, MD, GM, Brand Director, Marketing Head.
+Good decision-makers:
+Owner, Founder, Co-Founder, CEO, Managing Director, General Manager, Brand Director, Marketing Head, Director of Operations, VP, or another clearly senior budget holder.
 
-Categories
-Hotel | Resort | Serviced Apartment | Villa | Hospitality Brand | Restaurant | Cafe | Bar | Cloud Kitchen | Dining Group | F&B Brand | Real Estate Developer | Property Group | Real Estate Agency | Project Launch | Salon | Gym | Spa | Studio | Wellness Brand | Lifestyle Brand | Outside ICP | Unclear
-Use the most specific one. Hotel not Hospitality. Restaurant not F&B.
+Input:
+You will receive one lead row with these fields:
+profileUrl, fullName, firstName, lastName, companyName, title, companyUrl, regularCompanyUrl, summary, titleDescription, industry, companyLocation, location, durationInRole, durationInCompany, pastExperienceCompanyName, pastExperienceCompanyUrl, pastExperienceCompanyTitle, pastExperienceDate, pastExperienceDuration, name, vmid, linkedInProfileUrl, isOpenLink, defaultProfileUrl
 
-Disqualify If
-Business: Agency, SaaS, recruiter, NGO, B2B, coach/consultant/advisor, clinics/healthcare, tech, media/publisher, events, education, finance, logistics, architecture/construction (unless developer)
-Person: Intern, coordinator, assistant, analyst, student, job seeker, freelancer, VA, influencer, coach, academic, retired (unless operating ICP business), personal branding focused
+Your job:
+1. Decide if the lead is Qualified, Disqualified, or Needs Review
+2. Assign a broad lead_category
+3. Assign the most specific lead_sub_category possible
+4. Write one short qualification_note explaining the decision
 
-Status
-Qualified: Fits ICP + has authority.
-Disqualified: Outside ICP, B2B, no authority, or any disqualifier.
-Needs Review: Strong ICP signals but one conflicting signal (wrong tag, holding company, borderline title).
-Multiple properties/venues = note as high-value portfolio lead.
+Rules:
+- Use only the data in the row
+- Do not guess or invent facts
+- If data is missing, treat it as unknown
+- Judge the CURRENT business only
+- Do not qualify based on past roles alone
+- If someone sells to hospitality, F&B, real estate, or lifestyle brands but does not operate one, Disqualify
+- Do not reward or penalize geography
+- LinkedIn industry can be wrong, so cross-check companyName, title, summary, titleDescription, industry, companyLocation, and location
+- If companyName clearly signals the business type, trust that more than industry
+- If company is a holding company, corporation, or generic group, check whether title, summary, or titleDescription suggest hotel, restaurant, venue, wellness, or real estate operations
+- Certifications like CHIA, CHA, CRME are strong hospitality signals
+- Use the most specific sub-category the row supports
+- If the business is outside ICP, Disqualify even if the person is senior
+- If evidence is mixed but there is still a real ICP signal, use Needs Review
+- If evidence is weak or unclear and does not strongly support ICP, use Disqualified
 
-Output
-lead_category: One from categories above
-qualification_status: Qualified, Disqualified, or Needs Review
-qualification_note: One sentence, specific signal that drove the decision
+Primary signals to trust first:
+1. companyName
+2. title
+3. titleDescription
+4. summary
+5. industry
+6. companyLocation and location
+7. pastExperience only as supporting context, never as the main reason
 
-Examples
-1. Wrong industry tag
-Row: GM, Boutique Corporation PCL, Real Estate, Bangkok
-lead_category: Hospitality Brand
-qualification_status: Qualified
-qualification_note: GM at Boutique Corporation operates hotels despite Real Estate tag. Portfolio lead.
-2. Agency
-Row: CEO, Digital Marketing Solutions Co, Marketing, Dubai
-lead_category: Outside ICP
-qualification_status: Disqualified
-qualification_note: Marketing agency, not a hospitality or F&B operator.
-3. Restaurant owner
-Row: Owner, Ember Bangkok, Restaurants, Bangkok
-lead_category: Restaurant
-qualification_status: Qualified
-qualification_note: Owner of Ember Bangkok with decision-making authority.
-4. Resort GM
-Row: GM, Keemala Beyond Enchanting, Hospitality, Phuket
-lead_category: Resort
-qualification_status: Qualified
-qualification_note: GM of Keemala luxury resort in Phuket.
-5. Student
-Row: Hospitality Management Student, Cornell University, Higher Education, New York
-lead_category: Outside ICP
-qualification_status: Disqualified
-qualification_note: Student, not operating a business.
-6. Job seeker
-Row: Open to Work, blank company, Hospitality, Bangkok
-lead_category: Outside ICP
-qualification_status: Disqualified
-qualification_note: Job seeker with no current business.
-7. Freelancer
-Row: Freelance Social Media Manager, Self-Employed, Marketing, Phuket
-lead_category: Outside ICP
-qualification_status: Disqualified
-qualification_note: Freelancer, not operating an ICP business.
-8. Consultant
-Row: Hospitality Consultant, HospitalityAdvisors Co, Hospitality, Dubai
-lead_category: Outside ICP
-qualification_status: Disqualified
-qualification_note: Consulting firm, not operating hotels or venues.
-9. Holding company
-Row: Director, Minor International PCL, Food and Beverages, Bangkok
-lead_category: Hospitality Brand
-qualification_status: Needs Review
-qualification_note: Director at Minor International, diversified group. Borderline authority. Portfolio lead if confirmed.
-10. Developer
-Row: CEO, Sansiri PCL, Real Estate, Bangkok
-lead_category: Real Estate Developer
-qualification_status: Qualified
-qualification_note: CEO of Sansiri, major developer. Portfolio lead.
+Broad lead_category values:
+- Hospitality
+- F&B
+- Real Estate
+- Lifestyle
+- Outside ICP
+- Unclear
 
+Allowed lead_sub_category values:
+- Hotel
+- Resort
+- Serviced Apartment
+- Villa
+- Hospitality Brand
+- Restaurant
+- Cafe
+- Bar
+- Cloud Kitchen
+- Dining Group
+- F&B Brand
+- Real Estate Developer
+- Property Group
+- Real Estate Agency
+- Project Launch
+- Salon
+- Gym
+- Spa
+- Studio
+- Wellness Brand
+- Lifestyle Brand
+- Outside ICP
+- Unclear
+
+Category mapping:
+- Hotel, Resort, Serviced Apartment, Villa, Hospitality Brand -> Hospitality
+- Restaurant, Cafe, Bar, Cloud Kitchen, Dining Group, F&B Brand -> F&B
+- Real Estate Developer, Property Group, Real Estate Agency, Project Launch -> Real Estate
+- Salon, Gym, Spa, Studio, Wellness Brand, Lifestyle Brand -> Lifestyle
+- Outside ICP -> Outside ICP
+- Unclear -> Unclear
+
+Automatic business disqualifiers:
+- Agency
+- PR firm
+- Marketing consultancy
+- SaaS or software company
+- Recruiter or staffing firm
+- NGO, association, nonprofit
+- B2B company
+- Coach
+- Consultant
+- Advisor
+- Mentor
+- Trainer
+- Practitioner
+- Speaker
+- Service provider mainly serving businesses
+- Healthcare, clinic, dentist, medical practice
+- Tech company or IT services
+- Media company, publisher, content platform unless they operate a venue or property
+- Event company
+- Education or training company
+- Financial services, bank, insurance, investment firm
+- Logistics, supply chain, distribution company
+- Architecture, interior design, construction unless clearly operating as a real estate developer
+
+Automatic person disqualifiers:
+- Intern
+- Coordinator
+- Assistant
+- Analyst
+- Student
+- Open to Work
+- Seeking opportunities
+- Job seeker
+- Freelancer
+- Independent contractor
+- Virtual assistant
+- Influencer
+- Creator
+- Personality
+- Academic
+- Professor
+- Researcher
+- PhD candidate
+- Retired, unless clearly operating an ICP-fit business
+- Personal-brand-first profile with no operating business
+
+Status logic:
+- Qualified = current business clearly fits ICP and person appears to have buying authority
+- Disqualified = outside ICP, disqualifier triggered, unclear current business, B2B/service-provider business, or no authority
+- Needs Review = strong ICP signal exists but there is one major conflicting signal such as wrong industry, generic holding company, unclear operations, borderline seniority, or missing company name
+
+Special handling:
+- If the company manages multiple properties, venues, or locations, mention "portfolio lead" or "multi-location lead" in the note
+- If title is borderline but business fit is strong, prefer Needs Review over Qualified
+- If only industry suggests fit but companyName/title/summary do not support it, do not qualify
+- If summary clearly shows they coach, consult, advise, or serve hospitality businesses rather than operate one, Disqualify
+
+Output:
+Return only these 4 lines and nothing else
+
+qualification_status: <Qualified / Disqualified / Needs Review>
+lead_category: <Hospitality / F&B / Real Estate / Lifestyle / Outside ICP / Unclear>
+lead_sub_category: <one allowed value>
+qualification_note: <one short sentence with the exact signal that drove the decision>
+
+Good note style:
+- Founder of a coaching business serving hospitality leaders, so current business is outside ICP
+- General Manager of Sole Mio Boutique Hotel and Wellness, a hotel operator with clear authority
+- Owner title plus F&B industry tag, but missing company name so business type needs review
+
+Bad note style:
+- good fit
+- outside ICP
+- unclear
+- senior lead
+
+Now qualify this lead row:
+[PASTE ONE LEAD ROW HERE]

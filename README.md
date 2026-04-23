@@ -43,6 +43,8 @@ Useful `.env` keys:
 
 - `OLLAMA_URL`
 - `OLLAMA_MODEL`
+- `LEADS_GOOGLE_SHEET_URL`
+- `LEADS_GOOGLE_SHEET_FILE`
 - `REQUEST_TIMEOUT_MS`
 - `NOTION_TOKEN`
 - `NOTION_DATABASE_ID`
@@ -50,6 +52,26 @@ Useful `.env` keys:
 2. Edit [config/settings.json](/Users/vipankumar/Desktop/Lead%20Qualifier/config/settings.json) if you want a different default model, endpoint, or timeout. Values in `.env` override `config/settings.json`.
 3. Replace the placeholder text in [config/prompt.txt](/Users/vipankumar/Desktop/Lead%20Qualifier/config/prompt.txt) with your lead qualification prompt.
 4. Drop one or more `.csv` files into [input](/Users/vipankumar/Desktop/Lead%20Qualifier/input).
+
+## Google Sheets Import
+
+If you do not want to upload a CSV manually, you can point the worker at a Google Sheet without using the Google Sheets API.
+
+Add this to `.env`:
+
+```bash
+LEADS_GOOGLE_SHEET_URL="https://docs.google.com/spreadsheets/d/your-sheet-id/edit?gid=0#gid=0"
+LEADS_GOOGLE_SHEET_FILE="google-sheet-leads.csv"
+```
+
+How it works:
+
+- the sheet must be shared for link access or published so Google can export it as CSV
+- the worker converts the Google Sheet link into a CSV export URL
+- when there is no CSV in `input/` and no resumable job in `processing/`, it downloads the sheet into `input/`
+- after that, the normal resume-safe CSV flow takes over
+
+This avoids Google API keys entirely.
 
 ## Ubuntu Secret Setup
 
