@@ -17,7 +17,7 @@ export async function createNotionSync({ config, logger }) {
   }
 
   const client = createNotionClient(config.notionToken);
-  const schema = await ensureDatabaseSchema(client, config.notionDatabaseId);
+  let schema = await loadDatabaseSchema(client, config.notionDatabaseId);
 
   await logger.info(
     `Notion sync enabled for database ${config.notionDatabaseId}. Title property: ${schema.titlePropertyName}.`
@@ -25,6 +25,7 @@ export async function createNotionSync({ config, logger }) {
 
   return {
     async upsertLead(record) {
+      schema = await ensureDatabaseSchema(client, config.notionDatabaseId, schema, record);
       const pageId = await findExistingPageId(client, config.notionDatabaseId, record);
       const properties = buildPageProperties(schema.titlePropertyName, record);
 
@@ -100,7 +101,7 @@ function createNotionClient(token) {
   };
 }
 
-async function ensureDatabaseSchema(client, databaseId) {
+async function loadDatabaseSchema(client, databaseId) {
   const database = await client.request("GET", `/databases/${databaseId}`);
   const titlePropertyName = findTitlePropertyName(database.properties);
 
@@ -108,21 +109,41 @@ async function ensureDatabaseSchema(client, databaseId) {
     throw new Error("Notion database does not have a title property.");
   }
 
+  return {
+    titlePropertyName,
+    properties: database.properties || {}
+  };
+}
+
+async function ensureDatabaseSchema(client, databaseId, schema, record) {
+  const properties = schema?.properties || {};
+  const titlePropertyName = schema?.titlePropertyName || findTitlePropertyName(properties);
+
   const updates = {};
-  ensurePropertyType(database.properties, PROPERTY_NAMES.leadUrl, "url", updates);
-  ensurePropertyType(database.properties, PROPERTY_NAMES.leadCategory, "rich_text", updates);
-  ensurePropertyType(database.properties, PROPERTY_NAMES.industry, "rich_text", updates);
-  ensurePropertyType(database.properties, PROPERTY_NAMES.qualification, "rich_text", updates);
-  ensurePropertyType(database.properties, PROPERTY_NAMES.qualificationNote, "rich_text", updates);
-  ensurePropertyType(database.properties, PROPERTY_NAMES.painHook, "rich_text", updates);
-  ensurePropertyType(database.properties, PROPERTY_NAMES.personalizedLine, "rich_text", updates);
+  ensurePropertyType(properties, PROPERTY_NAMES.leadUrl, "url", updates);
+  ensurePropertyType(properties, PROPERTY_NAMES.leadCategory, "rich_text", updates);
+  ensurePropertyType(properties, PROPERTY_NAMES.industry, "rich_text", updates);
+  ensurePropertyType(properties, PROPERTY_NAMES.qualification, "rich_text", updates);
+  ensurePropertyType(properties, PROPERTY_NAMES.qualificationNote, "rich_text", updates);
+  ensurePropertyType(properties, PROPERTY_NAMES.painHook, "rich_text", updates);
+  ensurePropertyType(properties, PROPERTY_NAMES.personalizedLine, "rich_text", updates);
+
+  for (const propertyName of getRecordPropertyNames(record, titlePropertyName)) {
+    ensurePropertyType(properties, propertyName, "rich_text", updates);
+  }
 
   if (Object.keys(updates).length > 0) {
     await client.request("PATCH", `/databases/${databaseId}`, { properties: updates });
   }
 
   return {
-    titlePropertyName
+    titlePropertyName,
+    properties: {
+      ...properties,
+      ...Object.fromEntries(
+        Object.entries(updates).map(([name, definition]) => [name, inferPropertyFromDefinition(definition)])
+      )
+    }
   };
 }
 
@@ -151,6 +172,18 @@ function propertyDefinitionForType(type) {
   }
 
   throw new Error(`Unsupported Notion property type: ${type}`);
+}
+
+function inferPropertyFromDefinition(definition) {
+  if (definition?.url) {
+    return { type: "url" };
+  }
+
+  if (definition?.rich_text) {
+    return { type: "rich_text" };
+  }
+
+  return { type: "" };
 }
 
 function findTitlePropertyName(properties) {
@@ -184,7 +217,7 @@ async function findExistingPageId(client, databaseId, record) {
 }
 
 function buildPageProperties(titlePropertyName, record) {
-  return {
+  const properties = {
     [titlePropertyName]: {
       title: buildRichTextArray(getFullName(record) || "Unnamed Lead")
     },
@@ -210,6 +243,20 @@ function buildPageProperties(titlePropertyName, record) {
       rich_text: buildRichTextArray(record.personalized_line)
     }
   };
+
+  for (const propertyName of getRecordPropertyNames(record, titlePropertyName)) {
+    properties[propertyName] = {
+      rich_text: buildRichTextArray(record[propertyName])
+    };
+  }
+
+  return properties;
+}
+
+function getRecordPropertyNames(record, titlePropertyName) {
+  return Object.keys(record || {})
+    .filter((name) => name && name !== titlePropertyName)
+    .sort((left, right) => left.localeCompare(right));
 }
 
 function getFullName(record) {

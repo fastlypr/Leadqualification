@@ -105,6 +105,8 @@ When Notion sync is enabled, the worker will create or use these database proper
 - `Pain hook`
 - `Personalized line`
 
+It will also create and update rich-text properties for the raw CSV row fields so each Notion page keeps the original lead data for future reference.
+
 Leads are matched by `Lead URL`, which is filled from `defaultProfileUrl` when available.
 
 ## Run Once
