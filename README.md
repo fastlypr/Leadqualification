@@ -29,6 +29,8 @@ The worker keeps every original CSV column in its resume-safe working file and a
 
 `qualification_status` can now be `Qualified`, `Disqualified`, or `Needs Review`.
 
+If a lead exhausts all retry attempts, the worker marks it as `Failed`.
+
 ## Setup
 
 1. Copy `.env.example` to `.env` and fill in any values you want to override locally:
@@ -44,6 +46,9 @@ Useful `.env` keys:
 - `LEADS_GOOGLE_SHEET_URL`
 - `LEADS_GOOGLE_SHEET_FILE`
 - `REQUEST_TIMEOUT_MS`
+- `LEAD_STALL_TIMEOUT_MS`
+- `LEAD_MAX_ATTEMPTS`
+- `OLLAMA_RESTART_COMMAND`
 - `NOTION_TOKEN`
 - `NOTION_DATABASE_ID`
 
@@ -86,6 +91,9 @@ Then paste:
 OLLAMA_URL="http://127.0.0.1:11434/api/chat"
 OLLAMA_MODEL="llama3:latest"
 REQUEST_TIMEOUT_MS="null"
+LEAD_STALL_TIMEOUT_MS="600000"
+LEAD_MAX_ATTEMPTS="3"
+OLLAMA_RESTART_COMMAND="sudo -n systemctl restart ollama"
 NOTION_TOKEN="YOUR_NOTION_TOKEN_HERE"
 NOTION_DATABASE_ID="YOUR_NOTION_DATABASE_ID_HERE"
 ```
@@ -163,9 +171,11 @@ node src/dm-index.js 10
 ## Important Behavior
 
 - Requests are fully sequential. The script waits for one lead to finish before sending the next request.
+- Each lead gets up to 3 attempts by default. If the AI step stalls for 10 minutes, the worker tries to restart Ollama and retries.
 - Progress is saved after every lead by rewriting the working CSV in `processing/`.
 - If the script stops halfway through, rerun it and it will resume from the saved state file.
 - If one lead fails, that row gets a `processing_error` value and the worker continues to the next lead.
+- If a lead already exists in Notion with a saved qualification, the worker reuses that result and skips the AI call.
 - If a row already has `processed_at` plus either `qualification_status` or `processing_error`, it is skipped on resume.
 - If Notion sync is enabled, each processed lead is upserted into the configured Notion database before the worker moves to the next lead.
 - If Notion sync is enabled, the source CSV is used as input only and no final enriched CSV is written to `output/`.

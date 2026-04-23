@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import path from "node:path";
 import {
   access,
@@ -197,35 +198,28 @@ async function processJob(state, promptText, config, logger, runState, notionSyn
         `Processing ${state.sourceName} row ${item.index + 1}/${total}${item.label ? ` (${item.label})` : ""}. Queue ${item.queuePosition}/${queuedItems.length}.`
       );
 
-      try {
-        const result = await qualifyLead({
-          config,
-          promptText,
-          leadRecord: buildQualificationInput(item.row)
-        });
+      const outcome = await processLeadWithRetries({
+        item,
+        total,
+        config,
+        promptText,
+        notionSync,
+        logger
+      });
 
-        item.row.lead_category = result.lead_category;
-        item.row.qualification_status = result.qualification_status;
-        item.row.qualification_note = result.qualification_note;
-        item.row.processing_error = "";
-        item.row.processed_at = new Date().toISOString();
-
-        if (notionSync) {
-          const syncResult = await notionSync.upsertLead(item.row);
-          await logger.info(
-            `Synced row ${item.index + 1}/${total} to Notion as ${syncResult.action}.`
-          );
-        }
-
+      if (outcome.syncResult) {
         await logger.info(
-          `Completed row ${item.index + 1}/${total} as ${item.row.qualification_status || "Unknown"}${item.row.lead_category ? ` [${item.row.lead_category}]` : ""}.`
+          `Synced row ${item.index + 1}/${total} to Notion as ${outcome.syncResult.action}.`
         );
-      } catch (error) {
-        item.row.processing_error = formatError(error, 500);
-        item.row.processed_at = new Date().toISOString();
+      }
 
+      if (outcome.failed) {
         await logger.error(
           `Row ${item.index + 1}/${total} failed${item.label ? ` (${item.label})` : ""}: ${item.row.processing_error}`
+        );
+      } else {
+        await logger.info(
+          `Completed row ${item.index + 1}/${total} as ${item.row.qualification_status || "Unknown"}${item.row.lead_category ? ` [${item.row.lead_category}]` : ""}.`
         );
       }
 
@@ -427,6 +421,229 @@ function fileStamp() {
   return new Date().toISOString().replace(/[:.]/g, "-");
 }
 
+async function processLeadWithRetries({ item, total, config, promptText, notionSync, logger }) {
+  const maxAttempts = Math.max(1, Number(config.leadMaxAttempts) || 1);
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const outcome = await processLeadAttempt({
+        item,
+        total,
+        config,
+        promptText,
+        notionSync,
+        logger
+      });
+
+      return {
+        failed: false,
+        syncResult: outcome.syncResult || null
+      };
+    } catch (error) {
+      lastError = error;
+      const formattedError = formatError(error, 500);
+      const retryable = shouldRetryLeadError(error);
+      const hasAttemptsLeft = attempt < maxAttempts;
+
+      await logger.error(
+        `Attempt ${attempt}/${maxAttempts} failed for row ${item.index + 1}/${total}${item.label ? ` (${item.label})` : ""}: ${formattedError}`
+      );
+
+      if (!(retryable && hasAttemptsLeft)) {
+        break;
+      }
+
+      if (shouldRestartOllamaForError(error)) {
+        await restartOllama({ config, logger, rowNumber: item.index + 1, total, attempt });
+      }
+
+      await logger.info(
+        `Retrying row ${item.index + 1}/${total}${item.label ? ` (${item.label})` : ""} with attempt ${attempt + 1}/${maxAttempts}.`
+      );
+    }
+  }
+
+  markLeadAsFailed(item.row, lastError, config);
+  const syncResult = await syncFailedLeadToNotion({ item, total, notionSync, logger });
+
+  return {
+    failed: true,
+    syncResult
+  };
+}
+
+async function processLeadAttempt({ item, total, config, promptText, notionSync, logger }) {
+  let result = null;
+  let syncResult = null;
+
+  if (notionSync) {
+    const existingLead = await notionSync.findQualifiedLead(item.row);
+
+    if (existingLead) {
+      result = {
+        lead_category: existingLead.lead_category,
+        qualification_status: existingLead.qualification_status,
+        qualification_note: existingLead.qualification_note
+      };
+
+      await logger.info(
+        `Skipped AI for row ${item.index + 1}/${total} by reusing existing Notion qualification ${existingLead.qualification_status}.`
+      );
+
+      applyLeadResult(item.row, result);
+      syncResult = await notionSync.upsertLead(item.row, existingLead.pageId);
+
+      return { syncResult };
+    }
+  }
+
+  const qualificationConfig = {
+    ...config,
+    requestTimeoutMs: getLeadAttemptTimeoutMs(config)
+  };
+
+  result = await qualifyLead({
+    config: qualificationConfig,
+    promptText,
+    leadRecord: buildQualificationInput(item.row)
+  });
+
+  applyLeadResult(item.row, result);
+
+  if (notionSync) {
+    syncResult = await notionSync.upsertLead(item.row);
+  }
+
+  return { syncResult };
+}
+
+function applyLeadResult(row, result) {
+  row.lead_category = result.lead_category;
+  row.qualification_status = result.qualification_status;
+  row.qualification_note = result.qualification_note;
+  row.processing_error = "";
+  row.processed_at = new Date().toISOString();
+}
+
+function markLeadAsFailed(row, error, config) {
+  row.lead_category = row.lead_category || "Unclear";
+  row.qualification_status = "Failed";
+  row.qualification_note = buildFailedQualificationNote(error, config.maxNoteLength);
+  row.processing_error = formatError(error, 500);
+  row.processed_at = new Date().toISOString();
+}
+
+function buildFailedQualificationNote(error, maxLength) {
+  const base = "Lead processing failed after repeated attempts.";
+  const detail = formatError(error, Math.max(60, maxLength - base.length - 1));
+  return truncate(`${base} ${detail}`.trim(), maxLength);
+}
+
+async function syncFailedLeadToNotion({ item, total, notionSync, logger }) {
+  if (!notionSync) {
+    return null;
+  }
+
+  try {
+    return await notionSync.upsertLead(item.row);
+  } catch (error) {
+    await logger.error(
+      `Could not sync Failed status for row ${item.index + 1}/${total}${item.label ? ` (${item.label})` : ""}: ${formatError(error, 400)}`
+    );
+    return null;
+  }
+}
+
+function getLeadAttemptTimeoutMs(config) {
+  const stallTimeout = Number(config.leadStallTimeoutMs) || 10 * 60 * 1000;
+  const requestTimeout = Number(config.requestTimeoutMs) || 0;
+
+  if (requestTimeout > 0) {
+    return Math.min(stallTimeout, requestTimeout);
+  }
+
+  return stallTimeout;
+}
+
+function shouldRetryLeadError(error) {
+  const message = formatError(error, 1000).toLowerCase();
+
+  if (
+    message.includes("validation_error") ||
+    message.includes("exists but is type") ||
+    message.includes("check that the integration token is valid") ||
+    message.includes("notion request failed with 400")
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function shouldRestartOllamaForError(error) {
+  const message = formatError(error, 1000).toLowerCase();
+
+  return (
+    message.includes("ollama request timed out") ||
+    message.includes("ollama request failed") ||
+    message.includes("ollama response did not include assistant content")
+  );
+}
+
+async function restartOllama({ config, logger, rowNumber, total, attempt }) {
+  const command = String(config.ollamaRestartCommand || "").trim();
+
+  if (!command) {
+    await logger.info(
+      `Skipping Ollama restart for row ${rowNumber}/${total} attempt ${attempt} because no restart command is configured.`
+    );
+    return;
+  }
+
+  await logger.info(
+    `Restarting Ollama before retrying row ${rowNumber}/${total} using: ${command}`
+  );
+
+  try {
+    await runShellCommand(command);
+    await logger.info(`Ollama restart command finished before retrying row ${rowNumber}/${total}.`);
+  } catch (error) {
+    await logger.error(
+      `Ollama restart command failed before retrying row ${rowNumber}/${total}: ${formatError(error, 400)}`
+    );
+  }
+}
+
+async function runShellCommand(command) {
+  await new Promise((resolve, reject) => {
+    const child = spawn("/bin/sh", ["-lc", command], {
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      const detail = [stderr.trim(), stdout.trim()].filter(Boolean).join(" ");
+      reject(new Error(detail || `Command exited with status ${code}.`));
+    });
+  });
+}
+
 function formatError(error, maxLength = 300) {
   const message =
     error instanceof Error ? error.message : typeof error === "string" ? error : JSON.stringify(error);
@@ -436,4 +653,14 @@ function formatError(error, maxLength = 300) {
   }
 
   return `${message.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function truncate(value, maxLength) {
+  const text = String(value || "");
+
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }

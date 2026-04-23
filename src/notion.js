@@ -82,9 +82,43 @@ export async function createNotionSync({ config, logger }) {
       return schema;
     },
 
-    async upsertLead(record) {
+    async findQualifiedLead(record) {
       schema = await ensureDatabaseSchema(client, config.notionDatabaseId, schema, record);
-      const pageId = await findExistingPageId(client, config.notionDatabaseId, schema, record);
+      const page = await findExistingPage(client, config.notionDatabaseId, schema, record);
+
+      if (!page) {
+        return null;
+      }
+
+      const flattened = flattenPageProperties(page);
+      const qualificationStatus = normalizeQualificationStatus(
+        flattened[schema.propertyNames.qualification]
+      );
+
+      if (!qualificationStatus) {
+        return null;
+      }
+
+      return {
+        pageId: page.id,
+        lead_category: firstNonEmpty([
+          flattened[schema.propertyNames.leadCategory],
+          flattened["Lead category"],
+          flattened["AI Lead category"]
+        ]),
+        qualification_status: qualificationStatus,
+        qualification_note: firstNonEmpty([
+          flattened[schema.propertyNames.qualificationNote],
+          flattened["Qualification note"],
+          flattened["AI Qualification note"]
+        ])
+      };
+    },
+
+    async upsertLead(record, existingPageId = "") {
+      schema = await ensureDatabaseSchema(client, config.notionDatabaseId, schema, record);
+      const pageId =
+        existingPageId || (await findExistingPageId(client, config.notionDatabaseId, schema, record));
       const properties = buildPageProperties(schema.titlePropertyName, schema.propertyNames, record);
 
       if (pageId) {
@@ -254,6 +288,11 @@ function findTitlePropertyName(properties) {
 }
 
 async function findExistingPageId(client, databaseId, schema, record) {
+  const page = await findExistingPage(client, databaseId, schema, record);
+  return page?.id || null;
+}
+
+async function findExistingPage(client, databaseId, schema, record) {
   const leadUrl = getLeadUrl(record);
 
   if (!leadUrl) {
@@ -270,7 +309,7 @@ async function findExistingPageId(client, databaseId, schema, record) {
     page_size: 1
   });
 
-  return query?.results?.[0]?.id || null;
+  return query?.results?.[0] || null;
 }
 
 function buildPageProperties(titlePropertyName, propertyNames, record) {
@@ -466,6 +505,65 @@ function buildRichTextArray(value) {
       }
     }
   ];
+}
+
+function flattenPageProperties(page) {
+  const record = {
+    notion_page_id: page.id,
+    notion_url: page.url
+  };
+
+  for (const [name, property] of Object.entries(page.properties || {})) {
+    record[name] = extractPropertyValue(property);
+  }
+
+  return record;
+}
+
+function extractPropertyValue(property) {
+  if (!property || !property.type) {
+    return "";
+  }
+
+  switch (property.type) {
+    case "title":
+      return getPlainText(property.title);
+    case "rich_text":
+      return getPlainText(property.rich_text);
+    case "url":
+      return property.url || "";
+    case "status":
+      return property.status?.name || "";
+    case "select":
+      return property.select?.name || "";
+    default:
+      return "";
+  }
+}
+
+function getPlainText(items) {
+  return (items || [])
+    .map((item) => item.plain_text || item.text?.content || "")
+    .filter(Boolean)
+    .join("");
+}
+
+function normalizeQualificationStatus(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+
+  if (normalized === "qualified") {
+    return "Qualified";
+  }
+
+  if (normalized === "disqualified") {
+    return "Disqualified";
+  }
+
+  if (normalized === "needs review") {
+    return "Needs Review";
+  }
+
+  return "";
 }
 
 function firstNonEmpty(values) {

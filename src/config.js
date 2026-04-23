@@ -23,6 +23,20 @@ export async function loadConfig(cwd = process.cwd()) {
     requestTimeoutMs: parseRequestTimeout(
       getEnvValue("REQUEST_TIMEOUT_MS") ?? parsed.requestTimeoutMs
     ),
+    leadStallTimeoutMs: parsePositiveNumber(
+      getEnvValue("LEAD_STALL_TIMEOUT_MS") ?? parsed.leadStallTimeoutMs,
+      10 * 60 * 1000,
+      "leadStallTimeoutMs"
+    ),
+    leadMaxAttempts: parsePositiveInteger(
+      getEnvValue("LEAD_MAX_ATTEMPTS") ?? parsed.leadMaxAttempts,
+      3,
+      "leadMaxAttempts"
+    ),
+    ollamaRestartCommand:
+      getEnvValue("OLLAMA_RESTART_COMMAND") ||
+      parsed.ollamaRestartCommand ||
+      "sudo -n systemctl restart ollama",
     maxNoteLength: Number(parsed.maxNoteLength || 220),
     maxOutreachLength: Number(parsed.maxOutreachLength || 500),
     notionToken: getEnvValue("NOTION_TOKEN") || null,
@@ -67,6 +81,34 @@ function parseRequestTimeout(value) {
     throw new Error(
       "Invalid `requestTimeoutMs` in config/settings.json. Use a positive number of milliseconds or null for no timeout."
     );
+  }
+
+  return parsed;
+}
+
+function parsePositiveNumber(value, fallback, fieldName) {
+  if (value === null || value === undefined || value === "") {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`Invalid \`${fieldName}\` in config/settings.json. Use a positive number.`);
+  }
+
+  return parsed;
+}
+
+function parsePositiveInteger(value, fallback, fieldName) {
+  if (value === null || value === undefined || value === "") {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`Invalid \`${fieldName}\` in config/settings.json. Use a positive integer.`);
   }
 
   return parsed;
