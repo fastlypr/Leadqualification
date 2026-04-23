@@ -1,15 +1,43 @@
 const NOTION_API_BASE_URL = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
 
-const PROPERTY_NAMES = {
-  leadUrl: "Lead URL",
-  leadCategory: "Lead category",
-  industry: "Industry",
-  qualification: "Qualification",
-  qualificationNote: "Qualification note",
-  painHook: "Pain hook",
-  personalizedLine: "Personalized line"
+const PROPERTY_DEFINITIONS = {
+  leadUrl: {
+    preferredName: "Lead URL",
+    fallbackName: "Lead profile URL",
+    type: "url"
+  },
+  leadCategory: {
+    preferredName: "Lead category",
+    fallbackName: "AI Lead category",
+    type: "rich_text"
+  },
+  industry: {
+    preferredName: "Industry",
+    fallbackName: "Lead industry",
+    type: "rich_text"
+  },
+  qualification: {
+    preferredName: "Qualification",
+    fallbackName: "AI Qualification",
+    type: "rich_text"
+  },
+  qualificationNote: {
+    preferredName: "Qualification note",
+    fallbackName: "AI Qualification note",
+    type: "rich_text"
+  }
 };
+
+const EXCLUDED_RAW_RECORD_KEYS = new Set([
+  "lead_category",
+  "qualification_status",
+  "qualification_note",
+  "pain_hook",
+  "personalized_line",
+  "processed_at",
+  "processing_error"
+]);
 
 export async function createNotionSync({ config, logger }) {
   if (!config.notionToken || !config.notionDatabaseId) {
@@ -26,8 +54,8 @@ export async function createNotionSync({ config, logger }) {
   return {
     async upsertLead(record) {
       schema = await ensureDatabaseSchema(client, config.notionDatabaseId, schema, record);
-      const pageId = await findExistingPageId(client, config.notionDatabaseId, record);
-      const properties = buildPageProperties(schema.titlePropertyName, record);
+      const pageId = await findExistingPageId(client, config.notionDatabaseId, schema, record);
+      const properties = buildPageProperties(schema.titlePropertyName, schema.propertyNames, record);
 
       if (pageId) {
         await client.request("PATCH", `/pages/${pageId}`, { properties });
@@ -111,24 +139,22 @@ async function loadDatabaseSchema(client, databaseId) {
 
   return {
     titlePropertyName,
-    properties: database.properties || {}
+    properties: database.properties || {},
+    propertyNames: resolveCorePropertyNames(database.properties || {}, titlePropertyName)
   };
 }
 
 async function ensureDatabaseSchema(client, databaseId, schema, record) {
   const properties = schema?.properties || {};
   const titlePropertyName = schema?.titlePropertyName || findTitlePropertyName(properties);
+  const propertyNames = resolveCorePropertyNames(properties, titlePropertyName);
 
   const updates = {};
-  ensurePropertyType(properties, PROPERTY_NAMES.leadUrl, "url", updates);
-  ensurePropertyType(properties, PROPERTY_NAMES.leadCategory, "rich_text", updates);
-  ensurePropertyType(properties, PROPERTY_NAMES.industry, "rich_text", updates);
-  ensurePropertyType(properties, PROPERTY_NAMES.qualification, "rich_text", updates);
-  ensurePropertyType(properties, PROPERTY_NAMES.qualificationNote, "rich_text", updates);
-  ensurePropertyType(properties, PROPERTY_NAMES.painHook, "rich_text", updates);
-  ensurePropertyType(properties, PROPERTY_NAMES.personalizedLine, "rich_text", updates);
+  for (const [key, definition] of Object.entries(PROPERTY_DEFINITIONS)) {
+    ensurePropertyType(properties, propertyNames[key], definition.type, updates);
+  }
 
-  for (const field of getRawRecordFieldMappings(record, titlePropertyName)) {
+  for (const field of getRawRecordFieldMappings(record, titlePropertyName, Object.values(propertyNames))) {
     ensurePropertyType(properties, field.propertyName, "rich_text", updates);
   }
 
@@ -138,6 +164,7 @@ async function ensureDatabaseSchema(client, databaseId, schema, record) {
 
   return {
     titlePropertyName,
+    propertyNames,
     properties: {
       ...properties,
       ...Object.fromEntries(
@@ -196,7 +223,7 @@ function findTitlePropertyName(properties) {
   return "";
 }
 
-async function findExistingPageId(client, databaseId, record) {
+async function findExistingPageId(client, databaseId, schema, record) {
   const leadUrl = getLeadUrl(record);
 
   if (!leadUrl) {
@@ -205,7 +232,7 @@ async function findExistingPageId(client, databaseId, record) {
 
   const query = await client.request("POST", `/databases/${databaseId}/query`, {
     filter: {
-      property: PROPERTY_NAMES.leadUrl,
+      property: schema.propertyNames.leadUrl,
       url: {
         equals: leadUrl
       }
@@ -216,35 +243,29 @@ async function findExistingPageId(client, databaseId, record) {
   return query?.results?.[0]?.id || null;
 }
 
-function buildPageProperties(titlePropertyName, record) {
+function buildPageProperties(titlePropertyName, propertyNames, record) {
   const properties = {
     [titlePropertyName]: {
       title: buildRichTextArray(getFullName(record) || "Unnamed Lead")
     },
-    [PROPERTY_NAMES.leadUrl]: {
+    [propertyNames.leadUrl]: {
       url: getLeadUrl(record) || null
     },
-    [PROPERTY_NAMES.leadCategory]: {
+    [propertyNames.leadCategory]: {
       rich_text: buildRichTextArray(record.lead_category)
     },
-    [PROPERTY_NAMES.industry]: {
+    [propertyNames.industry]: {
       rich_text: buildRichTextArray(record.industry)
     },
-    [PROPERTY_NAMES.qualification]: {
+    [propertyNames.qualification]: {
       rich_text: buildRichTextArray(record.qualification_status)
     },
-    [PROPERTY_NAMES.qualificationNote]: {
+    [propertyNames.qualificationNote]: {
       rich_text: buildRichTextArray(record.qualification_note)
-    },
-    [PROPERTY_NAMES.painHook]: {
-      rich_text: buildRichTextArray(record.pain_hook)
-    },
-    [PROPERTY_NAMES.personalizedLine]: {
-      rich_text: buildRichTextArray(record.personalized_line)
     }
   };
 
-  for (const field of getRawRecordFieldMappings(record, titlePropertyName)) {
+  for (const field of getRawRecordFieldMappings(record, titlePropertyName, Object.values(propertyNames))) {
     properties[field.propertyName] = {
       rich_text: buildRichTextArray(record[field.recordKey])
     };
@@ -253,18 +274,18 @@ function buildPageProperties(titlePropertyName, record) {
   return properties;
 }
 
-function getRawRecordFieldMappings(record, titlePropertyName) {
+function getRawRecordFieldMappings(record, titlePropertyName, reservedPropertyNames = []) {
   const keys = Object.keys(record || {}).sort((left, right) => left.localeCompare(right));
   const usedNames = new Set([
     String(titlePropertyName || "").trim().toLowerCase(),
-    ...Object.values(PROPERTY_NAMES).map((name) => String(name || "").trim().toLowerCase())
+    ...reservedPropertyNames.map((name) => String(name || "").trim().toLowerCase())
   ]);
   const mappings = [];
 
   for (const recordKey of keys) {
     const trimmedKey = String(recordKey || "").trim();
 
-    if (!trimmedKey) {
+    if (!trimmedKey || EXCLUDED_RAW_RECORD_KEYS.has(trimmedKey)) {
       continue;
     }
 
@@ -285,19 +306,96 @@ function buildDynamicPropertyName(recordKey, usedNames) {
   }
 
   const prefixedBase = `CSV ${baseName}`;
-  const prefixedNormalized = prefixedBase.toLowerCase();
+  return buildUniquePropertyName(prefixedBase, usedNames);
+}
 
-  if (!usedNames.has(prefixedNormalized)) {
-    return prefixedBase;
+function resolveCorePropertyNames(properties, titlePropertyName) {
+  const blockedNames = new Set(
+    Object.keys(properties || {}).map((name) => String(name || "").trim().toLowerCase())
+  );
+  const usedNames = new Set([String(titlePropertyName || "").trim().toLowerCase()]);
+  const resolved = {};
+
+  for (const [key, definition] of Object.entries(PROPERTY_DEFINITIONS)) {
+    const propertyName = resolveConfiguredPropertyName({
+      properties,
+      preferredName: definition.preferredName,
+      fallbackName: definition.fallbackName,
+      expectedType: definition.type,
+      blockedNames,
+      usedNames
+    });
+
+    resolved[key] = propertyName;
+    usedNames.add(propertyName.toLowerCase());
+    blockedNames.add(propertyName.toLowerCase());
+  }
+
+  return resolved;
+}
+
+function resolveConfiguredPropertyName({
+  properties,
+  preferredName,
+  fallbackName,
+  expectedType,
+  blockedNames,
+  usedNames
+}) {
+  const existingPreferred = findPropertyNameCaseInsensitive(properties, preferredName);
+
+  if (existingPreferred && properties[existingPreferred]?.type === expectedType) {
+    return existingPreferred;
+  }
+
+  const existingFallback = fallbackName
+    ? findPropertyNameCaseInsensitive(properties, fallbackName)
+    : "";
+
+  if (
+    existingFallback &&
+    properties[existingFallback]?.type === expectedType &&
+    !usedNames.has(existingFallback.toLowerCase())
+  ) {
+    return existingFallback;
+  }
+
+  const normalizedPreferred = String(preferredName || "").trim().toLowerCase();
+
+  if (!usedNames.has(normalizedPreferred) && !blockedNames.has(normalizedPreferred)) {
+    return preferredName;
+  }
+
+  return buildUniquePropertyName(fallbackName || preferredName, blockedNames);
+}
+
+function findPropertyNameCaseInsensitive(properties, targetName) {
+  const normalizedTarget = String(targetName || "").trim().toLowerCase();
+
+  for (const name of Object.keys(properties || {})) {
+    if (String(name || "").trim().toLowerCase() === normalizedTarget) {
+      return name;
+    }
+  }
+
+  return "";
+}
+
+function buildUniquePropertyName(baseName, blockedNames) {
+  const trimmedBase = String(baseName || "").trim();
+  const normalizedBase = trimmedBase.toLowerCase();
+
+  if (!blockedNames.has(normalizedBase)) {
+    return trimmedBase;
   }
 
   let suffix = 2;
 
   while (true) {
-    const candidate = `${prefixedBase} ${suffix}`;
+    const candidate = `${trimmedBase} ${suffix}`;
     const candidateNormalized = candidate.toLowerCase();
 
-    if (!usedNames.has(candidateNormalized)) {
+    if (!blockedNames.has(candidateNormalized)) {
       return candidate;
     }
 

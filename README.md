@@ -22,8 +22,6 @@ The worker keeps every original CSV column in its resume-safe working file and a
 - `lead_category`
 - `qualification_status`
 - `qualification_note`
-- `pain_hook`
-- `personalized_line`
 - `processed_at`
 - `processing_error`
 
@@ -102,8 +100,6 @@ When Notion sync is enabled, the worker will create or use these database proper
 - `Industry`
 - `Qualification`
 - `Qualification note`
-- `Pain hook`
-- `Personalized line`
 
 It will also create and update rich-text properties for the raw CSV row fields so each Notion page keeps the original lead data for future reference.
 
@@ -182,6 +178,8 @@ node src/dm-index.js 10
 
 ## Prompt Tips
 
-Your prompt should explain how you want leads categorized and what counts as `Qualified`, `Disqualified`, or `Needs Review`.
+Your main qualification prompt should explain how you want leads categorized and what counts as `Qualified`, `Disqualified`, or `Needs Review`.
+
+The main worker only expects those qualification fields. `Pain hook` and `Personalized line` are handled by the separate DM personalizer flow.
 
 The worker already forces JSON output internally, so your prompt can focus on qualification rules rather than response formatting.

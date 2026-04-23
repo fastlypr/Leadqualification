@@ -2,9 +2,7 @@ const RESPONSE_SCHEMA = {
   lead_category:
     "Hotel | Resort | Serviced Apartment | Villa | Hospitality Brand | Restaurant | Cafe | Bar | Cloud Kitchen | Dining Group | F&B Brand | Real Estate Developer | Property Group | Real Estate Agency | Project Launch | Salon | Gym | Spa | Studio | Wellness Brand | Lifestyle Brand | Outside ICP | Unclear",
   qualification_status: "Qualified | Disqualified | Needs Review",
-  qualification_note: "one short concrete sentence explaining why",
-  pain_hook: "required only when qualification_status is Qualified or Needs Review",
-  personalized_line: "required only when qualification_status is Qualified or Needs Review"
+  qualification_note: "one short concrete sentence explaining why"
 };
 
 export async function qualifyLead({ config, promptText, leadRecord }) {
@@ -68,8 +66,6 @@ function buildSystemPrompt() {
     "Only use the exact categories from the schema.",
     "qualification_note must cite a concrete row signal or a clearly missing signal.",
     "Never return a vague note like unclear, outside ICP, good fit, bad fit, or not a fit by itself.",
-    "If qualification_status is Qualified or Needs Review, also return pain_hook and personalized_line.",
-    "If qualification_status is Disqualified, omit pain_hook and personalized_line or return them as empty strings.",
     "Return only valid JSON.",
     "Do not wrap the JSON in markdown.",
     "Use this exact schema:",
@@ -197,25 +193,11 @@ function normalizeQualificationResult(result, config, leadRecord) {
     leadRecord,
     maxLength: config.maxNoteLength
   });
-  const painHook = buildPainHook({
-    rawPainHook: result.pain_hook ?? result.painHook ?? "",
-    status: status || "",
-    category: category || "Unclear",
-    leadRecord
-  });
-  const personalizedLine = buildPersonalizedLine({
-    rawPersonalizedLine: result.personalized_line ?? result.personalizedLine ?? "",
-    status: status || "",
-    category: category || "Unclear",
-    leadRecord
-  });
 
   return {
     lead_category: category || "Unclear",
     qualification_status: status || "",
-    qualification_note: note,
-    pain_hook: painHook,
-    personalized_line: personalizedLine
+    qualification_note: note
   };
 }
 
