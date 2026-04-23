@@ -128,8 +128,8 @@ async function ensureDatabaseSchema(client, databaseId, schema, record) {
   ensurePropertyType(properties, PROPERTY_NAMES.painHook, "rich_text", updates);
   ensurePropertyType(properties, PROPERTY_NAMES.personalizedLine, "rich_text", updates);
 
-  for (const propertyName of getRecordPropertyNames(record, titlePropertyName)) {
-    ensurePropertyType(properties, propertyName, "rich_text", updates);
+  for (const field of getRawRecordFieldMappings(record, titlePropertyName)) {
+    ensurePropertyType(properties, field.propertyName, "rich_text", updates);
   }
 
   if (Object.keys(updates).length > 0) {
@@ -244,19 +244,65 @@ function buildPageProperties(titlePropertyName, record) {
     }
   };
 
-  for (const propertyName of getRecordPropertyNames(record, titlePropertyName)) {
-    properties[propertyName] = {
-      rich_text: buildRichTextArray(record[propertyName])
+  for (const field of getRawRecordFieldMappings(record, titlePropertyName)) {
+    properties[field.propertyName] = {
+      rich_text: buildRichTextArray(record[field.recordKey])
     };
   }
 
   return properties;
 }
 
-function getRecordPropertyNames(record, titlePropertyName) {
-  return Object.keys(record || {})
-    .filter((name) => name && name !== titlePropertyName)
-    .sort((left, right) => left.localeCompare(right));
+function getRawRecordFieldMappings(record, titlePropertyName) {
+  const keys = Object.keys(record || {}).sort((left, right) => left.localeCompare(right));
+  const usedNames = new Set([
+    String(titlePropertyName || "").trim().toLowerCase(),
+    ...Object.values(PROPERTY_NAMES).map((name) => String(name || "").trim().toLowerCase())
+  ]);
+  const mappings = [];
+
+  for (const recordKey of keys) {
+    const trimmedKey = String(recordKey || "").trim();
+
+    if (!trimmedKey) {
+      continue;
+    }
+
+    const propertyName = buildDynamicPropertyName(trimmedKey, usedNames);
+    mappings.push({ recordKey, propertyName });
+    usedNames.add(propertyName.toLowerCase());
+  }
+
+  return mappings;
+}
+
+function buildDynamicPropertyName(recordKey, usedNames) {
+  const baseName = String(recordKey || "").trim();
+  const normalized = baseName.toLowerCase();
+
+  if (!usedNames.has(normalized)) {
+    return baseName;
+  }
+
+  const prefixedBase = `CSV ${baseName}`;
+  const prefixedNormalized = prefixedBase.toLowerCase();
+
+  if (!usedNames.has(prefixedNormalized)) {
+    return prefixedBase;
+  }
+
+  let suffix = 2;
+
+  while (true) {
+    const candidate = `${prefixedBase} ${suffix}`;
+    const candidateNormalized = candidate.toLowerCase();
+
+    if (!usedNames.has(candidateNormalized)) {
+      return candidate;
+    }
+
+    suffix += 1;
+  }
 }
 
 function getFullName(record) {
