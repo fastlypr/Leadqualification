@@ -39,6 +39,31 @@ const EXCLUDED_RAW_RECORD_KEYS = new Set([
   "processing_error"
 ]);
 
+const RESERVED_NOTION_SCHEMA_NAMES = new Set([
+  "title",
+  "rich_text",
+  "number",
+  "select",
+  "multi_select",
+  "status",
+  "date",
+  "people",
+  "files",
+  "checkbox",
+  "url",
+  "email",
+  "phone_number",
+  "formula",
+  "relation",
+  "rollup",
+  "created_time",
+  "created_by",
+  "last_edited_time",
+  "last_edited_by",
+  "button",
+  "verification"
+]);
+
 export async function createNotionSync({ config, logger }) {
   if (!config.notionToken || !config.notionDatabaseId) {
     return null;
@@ -52,6 +77,11 @@ export async function createNotionSync({ config, logger }) {
   );
 
   return {
+    async prepareSchema(record) {
+      schema = await ensureDatabaseSchema(client, config.notionDatabaseId, schema, record);
+      return schema;
+    },
+
     async upsertLead(record) {
       schema = await ensureDatabaseSchema(client, config.notionDatabaseId, schema, record);
       const pageId = await findExistingPageId(client, config.notionDatabaseId, schema, record);
@@ -278,6 +308,7 @@ function getRawRecordFieldMappings(record, titlePropertyName, reservedPropertyNa
   const keys = Object.keys(record || {}).sort((left, right) => left.localeCompare(right));
   const usedNames = new Set([
     String(titlePropertyName || "").trim().toLowerCase(),
+    ...RESERVED_NOTION_SCHEMA_NAMES,
     ...reservedPropertyNames.map((name) => String(name || "").trim().toLowerCase())
   ]);
   const mappings = [];

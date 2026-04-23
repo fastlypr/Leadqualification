@@ -181,6 +181,11 @@ async function processJob(state, promptText, config, logger, runState, notionSyn
   }
 
   if (queuedItems.length > 0) {
+    if (notionSync) {
+      await notionSync.prepareSchema(queuedItems[0].row);
+      await logger.info(`Prepared Notion fields for ${state.sourceName} before qualification starts.`);
+    }
+
     await logger.info(
       `Queued ${queuedItems.length} lead(s) from ${state.sourceName} with request concurrency 1.`
     );
