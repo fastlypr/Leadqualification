@@ -217,6 +217,16 @@ async function processJob(state, promptText, config, logger, runState, notionSyn
         await logger.error(
           `Row ${item.index + 1}/${total} failed${item.label ? ` (${item.label})` : ""}: ${item.row.processing_error}`
         );
+      } else if (outcome.skippedExisting) {
+        const skipDetail = item.row.qualification_status
+          ? ` as ${item.row.qualification_status}`
+          : item.row.processing_error
+            ? `. ${item.row.processing_error}`
+            : "";
+
+        await logger.info(
+          `Skipped row ${item.index + 1}/${total}${item.label ? ` (${item.label})` : ""} because this Lead URL already exists in Notion${skipDetail}.`
+        );
       } else {
         await logger.info(
           `Completed row ${item.index + 1}/${total} as ${item.row.qualification_status || "Unknown"}${item.row.lead_category ? ` [${item.row.lead_category}]` : ""}.`
@@ -438,6 +448,7 @@ async function processLeadWithRetries({ item, total, config, promptText, notionS
 
       return {
         failed: false,
+        skippedExisting: Boolean(outcome.skippedExisting),
         syncResult: outcome.syncResult || null
       };
     } catch (error) {
@@ -478,23 +489,11 @@ async function processLeadAttempt({ item, total, config, promptText, notionSync,
   let syncResult = null;
 
   if (notionSync) {
-    const existingLead = await notionSync.findQualifiedLead(item.row);
+    const existingLead = await notionSync.findExistingLead(item.row);
 
     if (existingLead) {
-      result = {
-        lead_category: existingLead.lead_category,
-        qualification_status: existingLead.qualification_status,
-        qualification_note: existingLead.qualification_note
-      };
-
-      await logger.info(
-        `Skipped AI for row ${item.index + 1}/${total} by reusing existing Notion qualification ${existingLead.qualification_status}.`
-      );
-
-      applyLeadResult(item.row, result);
-      syncResult = await notionSync.upsertLead(item.row, existingLead.pageId);
-
-      return { syncResult };
+      applyExistingLeadResult(item.row, existingLead);
+      return { skippedExisting: true, syncResult: null };
     }
   }
 
@@ -523,6 +522,17 @@ function applyLeadResult(row, result) {
   row.qualification_status = result.qualification_status;
   row.qualification_note = result.qualification_note;
   row.processing_error = "";
+  row.processed_at = new Date().toISOString();
+}
+
+function applyExistingLeadResult(row, existingLead) {
+  row.lead_category = existingLead.lead_category || row.lead_category || "";
+  row.qualification_status = existingLead.qualification_status || row.qualification_status || "";
+  row.qualification_note = existingLead.qualification_note || row.qualification_note || "";
+  row.processing_error =
+    row.qualification_status || row.qualification_note || row.lead_category
+      ? ""
+      : "Skipped because this Lead URL already exists in Notion without saved qualification fields.";
   row.processed_at = new Date().toISOString();
 }
 

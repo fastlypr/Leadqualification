@@ -175,9 +175,10 @@ node src/dm-index.js 10
 - Progress is saved after every lead by rewriting the working CSV in `processing/`.
 - If the script stops halfway through, rerun it and it will resume from the saved state file.
 - If one lead fails, that row gets a `processing_error` value and the worker continues to the next lead.
-- If a lead already exists in Notion with a saved qualification, the worker reuses that result and skips the AI call.
+- If a lead already exists in Notion with the same `Lead URL`, the worker skips the AI call and does not update that Notion page again.
+- If the existing Notion page already has `Lead category`, `Qualification`, or `Qualification note`, those values are copied into the local working CSV for that row.
 - If a row already has `processed_at` plus either `qualification_status` or `processing_error`, it is skipped on resume.
-- If Notion sync is enabled, each processed lead is upserted into the configured Notion database before the worker moves to the next lead.
+- If Notion sync is enabled, each lead that is not already present in Notion is upserted into the configured database before the worker moves to the next lead.
 - If Notion sync is enabled, the source CSV is used as input only and no final enriched CSV is written to `output/`.
 
 ## CSV Notes

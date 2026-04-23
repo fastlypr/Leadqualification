@@ -82,7 +82,7 @@ export async function createNotionSync({ config, logger }) {
       return schema;
     },
 
-    async findQualifiedLead(record) {
+    async findExistingLead(record) {
       schema = await ensureDatabaseSchema(client, config.notionDatabaseId, schema, record);
       const page = await findExistingPage(client, config.notionDatabaseId, schema, record);
 
@@ -90,29 +90,7 @@ export async function createNotionSync({ config, logger }) {
         return null;
       }
 
-      const flattened = flattenPageProperties(page);
-      const qualificationStatus = normalizeQualificationStatus(
-        flattened[schema.propertyNames.qualification]
-      );
-
-      if (!qualificationStatus) {
-        return null;
-      }
-
-      return {
-        pageId: page.id,
-        lead_category: firstNonEmpty([
-          flattened[schema.propertyNames.leadCategory],
-          flattened["Lead category"],
-          flattened["AI Lead category"]
-        ]),
-        qualification_status: qualificationStatus,
-        qualification_note: firstNonEmpty([
-          flattened[schema.propertyNames.qualificationNote],
-          flattened["Qualification note"],
-          flattened["AI Qualification note"]
-        ])
-      };
+      return buildExistingLeadSnapshot(page, schema);
     },
 
     async upsertLead(record, existingPageId = "") {
@@ -310,6 +288,31 @@ async function findExistingPage(client, databaseId, schema, record) {
   });
 
   return query?.results?.[0] || null;
+}
+
+function buildExistingLeadSnapshot(page, schema) {
+  const flattened = flattenPageProperties(page);
+  const qualificationValue = firstNonEmpty([
+    normalizeQualificationStatus(flattened[schema.propertyNames.qualification]),
+    flattened[schema.propertyNames.qualification],
+    flattened["Qualification"],
+    flattened["AI Qualification"]
+  ]);
+
+  return {
+    pageId: page.id,
+    lead_category: firstNonEmpty([
+      flattened[schema.propertyNames.leadCategory],
+      flattened["Lead category"],
+      flattened["AI Lead category"]
+    ]),
+    qualification_status: qualificationValue,
+    qualification_note: firstNonEmpty([
+      flattened[schema.propertyNames.qualificationNote],
+      flattened["Qualification note"],
+      flattened["AI Qualification note"]
+    ])
+  };
 }
 
 function buildPageProperties(titlePropertyName, propertyNames, record) {
