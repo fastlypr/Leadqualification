@@ -3,7 +3,7 @@ import { mkdir, readFile } from "node:fs/promises";
 
 export const PROMPT_PLACEHOLDER = "TODO_ADD_YOUR_PROMPT_HERE";
 
-export async function loadConfig(cwd = process.cwd()) {
+export async function loadConfig(cwd = process.cwd(), overrides = {}) {
   const envPath = path.resolve(cwd, ".env");
   await loadDotEnv(envPath);
 
@@ -15,11 +15,20 @@ export async function loadConfig(cwd = process.cwd()) {
     cwd,
     envPath,
     settingsPath,
-    ollamaUrl: getEnvValue("OLLAMA_URL") || parsed.ollamaUrl,
-    model: getEnvValue("OLLAMA_MODEL") || getEnvValue("MODEL") || parsed.model || "llama3:8b",
-    googleSheetUrl: getEnvValue("LEADS_GOOGLE_SHEET_URL") || parsed.googleSheetUrl || null,
+    ollamaUrl: overrides.ollamaUrl || getEnvValue("OLLAMA_URL") || parsed.ollamaUrl,
+    model:
+      overrides.model ||
+      getEnvValue("OLLAMA_MODEL") ||
+      getEnvValue("MODEL") ||
+      parsed.model ||
+      "llama3:8b",
+    googleSheetUrl:
+      overrides.googleSheetUrl || getEnvValue("LEADS_GOOGLE_SHEET_URL") || parsed.googleSheetUrl || null,
     googleSheetFileName:
-      getEnvValue("LEADS_GOOGLE_SHEET_FILE") || parsed.googleSheetFileName || "google-sheet-leads.csv",
+      overrides.googleSheetFileName ||
+      getEnvValue("LEADS_GOOGLE_SHEET_FILE") ||
+      parsed.googleSheetFileName ||
+      "google-sheet-leads.csv",
     requestTimeoutMs: parseRequestTimeout(
       getEnvValue("REQUEST_TIMEOUT_MS") ?? parsed.requestTimeoutMs
     ),
@@ -39,9 +48,11 @@ export async function loadConfig(cwd = process.cwd()) {
       "sudo -n systemctl restart ollama",
     maxNoteLength: Number(parsed.maxNoteLength || 220),
     maxOutreachLength: Number(parsed.maxOutreachLength || 500),
-    notionToken: getEnvValue("NOTION_TOKEN") || null,
-    notionDatabaseId: normalizeNotionDatabaseId(getEnvValue("NOTION_DATABASE_ID") || null),
-    promptFile: path.resolve(cwd, parsed.promptFile || "./config/prompt.txt"),
+    notionToken: overrides.notionToken || getEnvValue("NOTION_TOKEN") || null,
+    notionDatabaseId: normalizeNotionDatabaseId(
+      overrides.notionDatabaseId || getEnvValue("NOTION_DATABASE_ID") || null
+    ),
+    promptFile: path.resolve(cwd, overrides.promptFile || parsed.promptFile || "./config/prompt.txt"),
     inputDir: path.resolve(cwd, parsed.inputDir || "./input"),
     processingDir: path.resolve(cwd, parsed.processingDir || "./processing"),
     outputDir: path.resolve(cwd, parsed.outputDir || "./output"),

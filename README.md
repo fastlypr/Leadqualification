@@ -127,6 +127,28 @@ To process only the first 10 leads:
 node src/index.js 10
 ```
 
+## Runtime Overrides
+
+You can override the Google Sheet source and Notion target at run time without editing `.env` or `config/settings.json`.
+
+Examples:
+
+```bash
+node src/index.js \
+  --google-sheet-url "https://docs.google.com/spreadsheets/d/your-sheet-id/edit?gid=0#gid=0" \
+  --notion-database "https://www.notion.so/your-database-url"
+```
+
+```bash
+node src/index.js \
+  --max-leads 25 \
+  --google-sheet-url "https://docs.google.com/spreadsheets/d/your-sheet-id/edit?gid=0#gid=0" \
+  --google-sheet-file "batch-april-24.csv" \
+  --notion-database "34c9a2df-3f5c-80e1-ae12-c986e6b0cd11"
+```
+
+The Notion override accepts either a raw database ID or a full Notion database URL.
+
 ## DM Personalizer
 
 The separate DM worker uses this default Notion database:
