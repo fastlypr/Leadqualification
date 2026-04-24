@@ -197,4 +197,6 @@ The worker already forces JSON output internally, so your prompt can focus on qu
 
 The qualifier sends the model a prompt-shaped row using these keys when available: `firstName`, `companyName`, `linkedinHeadline`, `linkedinJobTitle`, `linkedinJobDescription`, `linkedinDescription`, `companyIndustry`, `linkedinCompanyDescription`, `linkedinCompanyTagline`, `linkedinCompanySpecialities`, `linkedinJobLocation`, and `linkedinIsOpenToWorkBadge`.
 
+Other export fields such as `lastName`, profile URLs, websites, and raw location helpers stay in the CSV and Notion sync, but they are not sent to the qualifier unless the prompt contract is updated to use them.
+
 Past-experience fields and internal tracking fields are intentionally left out of the AI input to reduce false positives from hospitality-adjacent backgrounds.

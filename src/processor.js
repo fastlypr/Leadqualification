@@ -364,31 +364,18 @@ function stripOutputColumns(record) {
 function buildQualificationInput(record) {
   const source = stripOutputColumns(record);
   const selected = {
-    firstName: firstNonEmptyValue([source.firstName]),
-    companyName: firstNonEmptyValue([source.companyName]),
-    linkedinHeadline: firstNonEmptyValue([source.linkedinHeadline, source.name, source.fullName]),
-    linkedinJobTitle: firstNonEmptyValue([source.linkedinJobTitle, source.title]),
-    linkedinJobDescription: firstNonEmptyValue([source.linkedinJobDescription, source.titleDescription]),
-    linkedinDescription: firstNonEmptyValue([source.linkedinDescription, source.summary]),
-    companyIndustry: firstNonEmptyValue([source.companyIndustry, source.industry]),
-    linkedinCompanyDescription: firstNonEmptyValue([
-      source.linkedinCompanyDescription,
-      source.companyDescription,
-      source.companySummary
-    ]),
-    linkedinCompanyTagline: firstNonEmptyValue([source.linkedinCompanyTagline, source.companyTagline]),
-    linkedinCompanySpecialities: firstNonEmptyValue([
-      source.linkedinCompanySpecialities,
-      source.companySpecialities,
-      source.companySpecialties,
-      source.specialities,
-      source.specialties
-    ]),
-    linkedinJobLocation: firstNonEmptyValue([source.linkedinJobLocation, source.location, source.companyLocation]),
-    linkedinIsOpenToWorkBadge: firstNonEmptyValue([
-      source.linkedinIsOpenToWorkBadge,
-      source.isOpenToWorkBadge
-    ])
+    firstName: source.firstName,
+    companyName: source.companyName,
+    linkedinHeadline: source.linkedinHeadline,
+    linkedinJobTitle: source.linkedinJobTitle,
+    linkedinJobDescription: source.linkedinJobDescription,
+    linkedinDescription: source.linkedinDescription,
+    companyIndustry: source.companyIndustry,
+    linkedinCompanyDescription: source.linkedinCompanyDescription,
+    linkedinCompanyTagline: source.linkedinCompanyTagline,
+    linkedinCompanySpecialities: source.linkedinCompanySpecialities,
+    linkedinJobLocation: source.linkedinJobLocation,
+    linkedinIsOpenToWorkBadge: source.linkedinIsOpenToWorkBadge
   };
 
   for (const field of Object.keys(selected)) {
@@ -416,16 +403,6 @@ function orderFields(record, fieldOrder) {
   }
 
   return ordered;
-}
-
-function firstNonEmptyValue(values) {
-  for (const value of values) {
-    if (String(value ?? "").trim()) {
-      return value;
-    }
-  }
-
-  return "";
 }
 
 function isAlreadyProcessed(record) {
