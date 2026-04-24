@@ -24,19 +24,18 @@ const OUTPUT_COLUMNS = [
   "processing_error"
 ];
 
-const ICP_INPUT_FIELDS = [
-  "fullName",
-  "firstName",
-  "lastName",
+const QUALIFICATION_INPUT_FIELD_ORDER = [
   "companyName",
   "title",
+  "headline",
+  "summary",
+  "titleDescription",
   "industry",
   "companyLocation",
   "location",
-  "summary",
-  "titleDescription",
   "durationInRole",
-  "durationInCompany"
+  "durationInCompany",
+  "fullName"
 ];
 
 export async function processPendingFiles({ config, logger, maxLeads = null }) {
@@ -363,17 +362,55 @@ function stripOutputColumns(record) {
 
 function buildQualificationInput(record) {
   const source = stripOutputColumns(record);
-  const selected = {};
+  const selected = {
+    companyName: source.companyName,
+    title: source.title,
+    headline: firstNonEmptyValue([source.name, source.fullName]),
+    summary: source.summary,
+    titleDescription: source.titleDescription,
+    industry: source.industry,
+    companyLocation: source.companyLocation,
+    location: source.location,
+    durationInRole: source.durationInRole,
+    durationInCompany: source.durationInCompany,
+    fullName: source.fullName
+  };
 
-  for (const field of ICP_INPUT_FIELDS) {
-    const value = source[field];
-
-    if (String(value ?? "").trim()) {
-      selected[field] = value;
+  for (const field of Object.keys(selected)) {
+    if (!String(selected[field] ?? "").trim()) {
+      delete selected[field];
     }
   }
 
-  return selected;
+  return orderFields(selected, QUALIFICATION_INPUT_FIELD_ORDER);
+}
+
+function orderFields(record, fieldOrder) {
+  const ordered = {};
+
+  for (const field of fieldOrder) {
+    if (Object.hasOwn(record, field)) {
+      ordered[field] = record[field];
+    }
+  }
+
+  for (const [field, value] of Object.entries(record)) {
+    if (!Object.hasOwn(ordered, field)) {
+      ordered[field] = value;
+    }
+  }
+
+  return ordered;
+}
+
+function firstNonEmptyValue(values) {
+  for (const value of values) {
+    if (String(value ?? "").trim()) {
+      return value;
+    }
+  }
+
+  return "";
 }
 
 function isAlreadyProcessed(record) {

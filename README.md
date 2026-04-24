@@ -194,3 +194,7 @@ Your main qualification prompt should explain how you want leads categorized and
 The main worker only expects those qualification fields. `Pain hook` and `Personalized line` are handled by the separate DM personalizer flow.
 
 The worker already forces JSON output internally, so your prompt can focus on qualification rules rather than response formatting.
+
+The qualifier sends a curated current-business snapshot to the model: `companyName`, `title`, `headline`, `summary`, `titleDescription`, `industry`, `companyLocation`, `location`, role/company tenure, and `fullName`.
+
+Past-experience fields and internal tracking fields are intentionally left out of the AI input to reduce false positives from hospitality-adjacent backgrounds.

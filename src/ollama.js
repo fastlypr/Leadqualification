@@ -78,7 +78,7 @@ function buildUserPrompt(promptText, leadRecord) {
     "Follow these lead qualification rules exactly:",
     promptText,
     "",
-    "Lead record:",
+    "Lead record (selected current-business signals from the CSV row; past-experience and internal tracking fields were omitted on purpose):",
     JSON.stringify(leadRecord, null, 2),
     "",
     "Return only JSON with the required keys. Keep qualification_note concise but specific."
@@ -311,11 +311,13 @@ function isVagueQualificationNote(note, leadRecord) {
 function hasConcreteRowEvidence(note, leadRecord) {
   const haystack = squashWhitespace(note).toLowerCase();
   const candidates = [
+    leadRecord.headline,
     leadRecord.title,
     leadRecord.companyName,
     leadRecord.industry,
     leadRecord.location,
     leadRecord.companyLocation,
+    leadRecord.name,
     leadRecord.firstName,
     leadRecord.lastName,
     leadRecord.fullName
@@ -332,6 +334,7 @@ function buildFallbackQualificationNote({ status, category, leadRecord }) {
   const industry = squashWhitespace(leadRecord.industry);
   const portfolioLead = isPortfolioLead(leadRecord);
   const combinedText = [
+    leadRecord.headline,
     leadRecord.title,
     leadRecord.companyName,
     leadRecord.industry,
