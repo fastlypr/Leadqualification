@@ -25,17 +25,18 @@ const OUTPUT_COLUMNS = [
 ];
 
 const QUALIFICATION_INPUT_FIELD_ORDER = [
+  "firstName",
   "companyName",
-  "title",
-  "headline",
-  "summary",
-  "titleDescription",
-  "industry",
-  "companyLocation",
-  "location",
-  "durationInRole",
-  "durationInCompany",
-  "fullName"
+  "linkedinHeadline",
+  "linkedinJobTitle",
+  "linkedinJobDescription",
+  "linkedinDescription",
+  "companyIndustry",
+  "linkedinCompanyDescription",
+  "linkedinCompanyTagline",
+  "linkedinCompanySpecialities",
+  "linkedinJobLocation",
+  "linkedinIsOpenToWorkBadge"
 ];
 
 export async function processPendingFiles({ config, logger, maxLeads = null }) {
@@ -363,17 +364,31 @@ function stripOutputColumns(record) {
 function buildQualificationInput(record) {
   const source = stripOutputColumns(record);
   const selected = {
-    companyName: source.companyName,
-    title: source.title,
-    headline: firstNonEmptyValue([source.name, source.fullName]),
-    summary: source.summary,
-    titleDescription: source.titleDescription,
-    industry: source.industry,
-    companyLocation: source.companyLocation,
-    location: source.location,
-    durationInRole: source.durationInRole,
-    durationInCompany: source.durationInCompany,
-    fullName: source.fullName
+    firstName: firstNonEmptyValue([source.firstName]),
+    companyName: firstNonEmptyValue([source.companyName]),
+    linkedinHeadline: firstNonEmptyValue([source.linkedinHeadline, source.name, source.fullName]),
+    linkedinJobTitle: firstNonEmptyValue([source.linkedinJobTitle, source.title]),
+    linkedinJobDescription: firstNonEmptyValue([source.linkedinJobDescription, source.titleDescription]),
+    linkedinDescription: firstNonEmptyValue([source.linkedinDescription, source.summary]),
+    companyIndustry: firstNonEmptyValue([source.companyIndustry, source.industry]),
+    linkedinCompanyDescription: firstNonEmptyValue([
+      source.linkedinCompanyDescription,
+      source.companyDescription,
+      source.companySummary
+    ]),
+    linkedinCompanyTagline: firstNonEmptyValue([source.linkedinCompanyTagline, source.companyTagline]),
+    linkedinCompanySpecialities: firstNonEmptyValue([
+      source.linkedinCompanySpecialities,
+      source.companySpecialities,
+      source.companySpecialties,
+      source.specialities,
+      source.specialties
+    ]),
+    linkedinJobLocation: firstNonEmptyValue([source.linkedinJobLocation, source.location, source.companyLocation]),
+    linkedinIsOpenToWorkBadge: firstNonEmptyValue([
+      source.linkedinIsOpenToWorkBadge,
+      source.isOpenToWorkBadge
+    ])
   };
 
   for (const field of Object.keys(selected)) {

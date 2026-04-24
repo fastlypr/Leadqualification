@@ -195,6 +195,6 @@ The main worker only expects those qualification fields. `Pain hook` and `Person
 
 The worker already forces JSON output internally, so your prompt can focus on qualification rules rather than response formatting.
 
-The qualifier sends a curated current-business snapshot to the model: `companyName`, `title`, `headline`, `summary`, `titleDescription`, `industry`, `companyLocation`, `location`, role/company tenure, and `fullName`.
+The qualifier sends the model a prompt-shaped row using these keys when available: `firstName`, `companyName`, `linkedinHeadline`, `linkedinJobTitle`, `linkedinJobDescription`, `linkedinDescription`, `companyIndustry`, `linkedinCompanyDescription`, `linkedinCompanyTagline`, `linkedinCompanySpecialities`, `linkedinJobLocation`, and `linkedinIsOpenToWorkBadge`.
 
 Past-experience fields and internal tracking fields are intentionally left out of the AI input to reduce false positives from hospitality-adjacent backgrounds.

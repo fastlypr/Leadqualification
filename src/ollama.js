@@ -78,7 +78,7 @@ function buildUserPrompt(promptText, leadRecord) {
     "Follow these lead qualification rules exactly:",
     promptText,
     "",
-    "Lead record (selected current-business signals from the CSV row; past-experience and internal tracking fields were omitted on purpose):",
+    "Lead record (mapped to the prompt's expected field names; only current-business signals were included):",
     JSON.stringify(leadRecord, null, 2),
     "",
     "Return only JSON with the required keys. Keep qualification_note concise but specific."
@@ -311,16 +311,12 @@ function isVagueQualificationNote(note, leadRecord) {
 function hasConcreteRowEvidence(note, leadRecord) {
   const haystack = squashWhitespace(note).toLowerCase();
   const candidates = [
-    leadRecord.headline,
-    leadRecord.title,
-    leadRecord.companyName,
-    leadRecord.industry,
-    leadRecord.location,
-    leadRecord.companyLocation,
-    leadRecord.name,
-    leadRecord.firstName,
-    leadRecord.lastName,
-    leadRecord.fullName
+    getLeadHeadline(leadRecord),
+    getLeadTitle(leadRecord),
+    getLeadCompanyName(leadRecord),
+    getLeadIndustry(leadRecord),
+    getLeadLocation(leadRecord),
+    getLeadFirstName(leadRecord)
   ]
     .map((value) => squashWhitespace(value).toLowerCase())
     .filter(Boolean);
@@ -329,17 +325,20 @@ function hasConcreteRowEvidence(note, leadRecord) {
 }
 
 function buildFallbackQualificationNote({ status, category, leadRecord }) {
-  const title = squashWhitespace(leadRecord.title);
-  const companyName = squashWhitespace(leadRecord.companyName);
-  const industry = squashWhitespace(leadRecord.industry);
+  const title = squashWhitespace(getLeadTitle(leadRecord));
+  const companyName = squashWhitespace(getLeadCompanyName(leadRecord));
+  const industry = squashWhitespace(getLeadIndustry(leadRecord));
   const portfolioLead = isPortfolioLead(leadRecord);
   const combinedText = [
-    leadRecord.headline,
-    leadRecord.title,
-    leadRecord.companyName,
-    leadRecord.industry,
-    leadRecord.summary,
-    leadRecord.titleDescription
+    getLeadHeadline(leadRecord),
+    getLeadTitle(leadRecord),
+    getLeadCompanyName(leadRecord),
+    getLeadIndustry(leadRecord),
+    getLeadDescription(leadRecord),
+    getLeadJobDescription(leadRecord),
+    getLeadCompanyDescription(leadRecord),
+    getLeadCompanyTagline(leadRecord),
+    getLeadCompanySpecialities(leadRecord)
   ]
     .map((value) => squashWhitespace(value).toLowerCase())
     .filter(Boolean)
@@ -668,7 +667,11 @@ function squashWhitespace(value) {
 }
 
 function buildBusinessEvidence(category, companyName, industry, leadRecord) {
-  const description = squashWhitespace(leadRecord.titleDescription);
+  const description = firstNonEmpty([
+    squashWhitespace(getLeadCompanyDescription(leadRecord)),
+    squashWhitespace(getLeadJobDescription(leadRecord)),
+    squashWhitespace(getLeadDescription(leadRecord))
+  ]);
   const categoryLabel = formatCategoryLabel(category);
 
   if (category === "Outside ICP") {
@@ -938,7 +941,7 @@ function looksLikeGenericCompanyName(companyName) {
 
 function containsCompanyReference(text, leadRecord) {
   const haystack = squashWhitespace(text).toLowerCase();
-  const companyName = squashWhitespace(leadRecord.companyName).toLowerCase();
+  const companyName = squashWhitespace(getLeadCompanyName(leadRecord)).toLowerCase();
 
   if (!haystack || !companyName) {
     return false;
@@ -980,10 +983,13 @@ function containsCompanyReference(text, leadRecord) {
 
 function isPortfolioLead(leadRecord) {
   const text = [
-    leadRecord.companyName,
-    leadRecord.title,
-    leadRecord.summary,
-    leadRecord.titleDescription
+    getLeadCompanyName(leadRecord),
+    getLeadTitle(leadRecord),
+    getLeadDescription(leadRecord),
+    getLeadJobDescription(leadRecord),
+    getLeadCompanyDescription(leadRecord),
+    getLeadCompanyTagline(leadRecord),
+    getLeadCompanySpecialities(leadRecord)
   ]
     .map((value) => squashWhitespace(value).toLowerCase())
     .filter(Boolean)
@@ -996,8 +1002,7 @@ function isPortfolioLead(leadRecord) {
 
 function getShortLocation(leadRecord) {
   const raw = firstNonEmpty([
-    leadRecord.location,
-    leadRecord.companyLocation
+    getLeadLocation(leadRecord)
   ]);
 
   if (!raw) {
@@ -1043,6 +1048,50 @@ function firstNonEmpty(values) {
   }
 
   return "";
+}
+
+function getLeadFirstName(leadRecord) {
+  return firstNonEmpty([leadRecord.firstName]);
+}
+
+function getLeadCompanyName(leadRecord) {
+  return firstNonEmpty([leadRecord.companyName]);
+}
+
+function getLeadHeadline(leadRecord) {
+  return firstNonEmpty([leadRecord.linkedinHeadline, leadRecord.headline, leadRecord.fullName]);
+}
+
+function getLeadTitle(leadRecord) {
+  return firstNonEmpty([leadRecord.linkedinJobTitle, leadRecord.title]);
+}
+
+function getLeadJobDescription(leadRecord) {
+  return firstNonEmpty([leadRecord.linkedinJobDescription, leadRecord.titleDescription]);
+}
+
+function getLeadDescription(leadRecord) {
+  return firstNonEmpty([leadRecord.linkedinDescription, leadRecord.summary]);
+}
+
+function getLeadIndustry(leadRecord) {
+  return firstNonEmpty([leadRecord.companyIndustry, leadRecord.industry]);
+}
+
+function getLeadCompanyDescription(leadRecord) {
+  return firstNonEmpty([leadRecord.linkedinCompanyDescription]);
+}
+
+function getLeadCompanyTagline(leadRecord) {
+  return firstNonEmpty([leadRecord.linkedinCompanyTagline]);
+}
+
+function getLeadCompanySpecialities(leadRecord) {
+  return firstNonEmpty([leadRecord.linkedinCompanySpecialities]);
+}
+
+function getLeadLocation(leadRecord) {
+  return firstNonEmpty([leadRecord.linkedinJobLocation, leadRecord.location, leadRecord.companyLocation]);
 }
 
 function limitWords(value, maxWords) {
