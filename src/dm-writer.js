@@ -17,6 +17,7 @@ import { createDmWriterNotionSync } from "./notion-dm-writer.js";
 import { createTaskQueue } from "./queue.js";
 
 const OUTPUT_COLUMNS = ["dm_text", "dm_status", "processed_at", "processing_error"];
+const FINAL_OUTPUT_HEADERS = ["Name", "Profile url", "DM"];
 
 const DM_INPUT_FIELD_ORDER = [
   "Name",
@@ -255,7 +256,7 @@ async function processJob(state, promptText, config, logger, runState, notionSyn
 
   await copyFile(state.originalPath, state.donePath);
   await unlink(state.originalPath);
-  await copyFile(state.workingPath, state.outputPath);
+  await writeFinalOutputCsv(state.outputPath, records);
   await unlink(state.workingPath);
   await unlink(state.statePath);
 
@@ -525,6 +526,16 @@ async function writeCsv(filePath, headers, records) {
   await writeFile(filePath, stringifyCsv(headers, normalizedRecords), "utf8");
 }
 
+async function writeFinalOutputCsv(filePath, records) {
+  const outputRecords = records.map((record) => ({
+    Name: resolveOutputName(record),
+    "Profile url": resolveProfileUrl(record),
+    DM: String(record.dm_text || "").trim()
+  }));
+
+  await writeFile(filePath, stringifyCsv(FINAL_OUTPUT_HEADERS, outputRecords), "utf8");
+}
+
 async function writeState(state) {
   await writeFile(state.statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
@@ -595,6 +606,23 @@ function firstNonEmpty(values) {
   }
 
   return "";
+}
+
+function resolveOutputName(record) {
+  return firstNonEmpty([
+    record.Name,
+    record.name,
+    [record.firstName, record.lastName].filter(Boolean).join(" ").trim(),
+    record.companyName
+  ]);
+}
+
+function resolveProfileUrl(record) {
+  return firstNonEmpty([
+    record.linkedinProfileUrl,
+    record["Profile url"],
+    record.profileUrl
+  ]);
 }
 
 function slugify(value) {
