@@ -6,6 +6,7 @@
   "scripts": {
     "process": "node src/index.js",
     "start": "node src/index.js",
-    "personalize-dm": "node src/dm-index.js"
+    "personalize-dm": "node src/dm-index.js",
+    "write-dms": "node src/dm-writer-index.js"
   }
 }
