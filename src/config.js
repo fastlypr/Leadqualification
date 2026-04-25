@@ -21,7 +21,7 @@ export async function loadConfig(cwd = process.cwd(), overrides = {}) {
       getEnvValue("OLLAMA_MODEL") ||
       getEnvValue("MODEL") ||
       parsed.model ||
-      "llama3:8b",
+      "mistral:instruct",
     googleSheetUrl:
       overrides.googleSheetUrl || getEnvValue("LEADS_GOOGLE_SHEET_URL") || parsed.googleSheetUrl || null,
     googleSheetFileName:
